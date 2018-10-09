@@ -14,7 +14,7 @@
     <UseStandardResourceNames>true</UseStandardResourceNames>
     <TargetFSharpCoreVersion>4.4.3.0</TargetFSharpCoreVersion>
     <Name>Malmacs</Name>
-    <Win32Resource>C:\Users\nozo\Documents\Malmacs.git\Malmacs\Malmacs.res</Win32Resource>
+    <Win32Resource>Malmacs.res</Win32Resource>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
