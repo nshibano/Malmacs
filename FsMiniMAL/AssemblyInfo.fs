@@ -1,4 +1,4 @@
-﻿namespace FsMiniMAL.MemCal.AssemblyInfo
+﻿namespace FsMiniMAL.AssemblyInfo
 
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -7,11 +7,11 @@ open System.Runtime.InteropServices
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[<assembly: AssemblyTitle("FsMiniMAL.MemCal")>]
+[<assembly: AssemblyTitle("FsMiniMAL")>]
 [<assembly: AssemblyDescription("")>]
 [<assembly: AssemblyConfiguration("")>]
 [<assembly: AssemblyCompany("")>]
-[<assembly: AssemblyProduct("FsMiniMAL.MemCal")>]
+[<assembly: AssemblyProduct("FsMiniMAL")>]
 [<assembly: AssemblyCopyright("Copyright ©  2018")>]
 [<assembly: AssemblyTrademark("")>]
 [<assembly: AssemblyCulture("")>]
@@ -22,7 +22,7 @@ open System.Runtime.InteropServices
 [<assembly: ComVisible(false)>]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[<assembly: Guid("26a1d5b9-fe07-4fb0-a76c-5558ac6058af")>]
+[<assembly: Guid("96de1fec-1ad1-43ac-a234-215606f33fff")>]
 
 // Version information for an assembly consists of the following four values:
 //

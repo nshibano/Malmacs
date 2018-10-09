@@ -5,11 +5,11 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>9cf5c161-f6bd-4d5c-aeb8-9120fe317818</ProjectGuid>
+    <ProjectGuid>26a1d5b9-fe07-4fb0-a76c-5558ac6058af</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>FsMiniMAL.MemCal</RootNamespace>
     <AssemblyName>FsMiniMAL.MemCal</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <UseStandardResourceNames>true</UseStandardResourceNames>
     <Name>FsMiniMAL.MemCal</Name>
@@ -56,17 +56,19 @@
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="System" />
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>..\packages\System.Collections.Immutable.1.5.0\lib\netstandard2.0\System.Collections.Immutable.dll</HintPath>
+    </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
     <Reference Include="System.ValueTuple">
-      <HintPath>..\packages\System.ValueTuple.4.5.0\lib\net461\System.ValueTuple.dll</HintPath>
       <Private>True</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FsMiniMAL\FsMiniMAL.fsproj">
       <Name>FsMiniMAL</Name>
-      <Project>{4af2850f-8798-4be9-8f57-24f04fe974ed}</Project>
+      <Project>{96de1fec-1ad1-43ac-a234-215606f33fff}</Project>
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>

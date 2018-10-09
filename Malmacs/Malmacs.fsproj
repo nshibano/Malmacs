@@ -106,7 +106,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FsMiniMAL\FsMiniMAL.fsproj">
       <Name>FsMiniMAL</Name>
-      <Project>{4af2850f-8798-4be9-8f57-24f04fe974ed}</Project>
+      <Project>{96de1fec-1ad1-43ac-a234-215606f33fff}</Project>
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>
