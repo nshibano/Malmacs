@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <NoWarn />
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="wc.fsx" />
+    <Compile Include="Lexing.fsi" />
+    <Compile Include="Lexing.fs" />
+    <Compile Include="Parsing.fsi" />
+    <Compile Include="Parsing.fs" />
+    <Compile Include="Misc.fs" />
+    <Compile Include="PrintfFormat.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Syntax.fs" />
+    <Compile Include="MalLex.fs" />
+    <Compile Include="ParseHelper.fs" />
+    <Compile Include="Parser.fsi" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="LexHelper.fs" />
+    <Compile Include="Lexer.fs" />
+    <Compile Include="Unify.fs" />
+    <Compile Include="Typechk.fs" />
+    <Compile Include="Allocator.fs" />
+    <Compile Include="Value.fs" />
+    <Compile Include="Translate.fs" />
+    <Compile Include="MalPrintf.fs" />
+    <Compile Include="Message.fs" />
+    <Compile Include="Printer.fs" />
+    <Compile Include="Interpreter.fs" />
+    <Compile Include="MalCompare.fs" />
+    <Compile Include="Top.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Parser.fsy" />
+    <None Include="Lexer.fsl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Collections.Immutable" Version="1.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.5.2" />
+  </ItemGroup>
+
+</Project>

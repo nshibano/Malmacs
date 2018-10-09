@@ -1,0 +1,143 @@
+﻿// After modify this file, run GenLexer.bat to generate Lexer.fs.
+{
+module FsMiniMAL.Lexer
+
+open System
+open System.Text
+open Parser
+open LexHelper
+}
+
+let dec = ['0'-'9']
+let hex = ['0'-'9' 'a'-'f' 'A'-'F']
+let oct = ['0'-'7']
+let bin = ['0'-'1']
+let ident = ['A'-'Z' 'a'-'z'] ['A'-'Z' 'a'-'z' '_' ''' '0'-'9']*
+let decint =               dec ((dec | '_')* dec)?
+let hexint = '0' ['x' 'X'] hex ((hex | '_')* hex)?
+let octint = '0' ['o' 'O'] oct ((oct | '_')* oct)?
+let binint = '0' ['b' 'B'] bin ((bin | '_')* bin)?
+let float = decint ('.' decint?)? (['e' 'E'] ['+' '-']? decint)?
+let dec3char = '\\' dec dec dec
+let hex4char = '\\' 'u' hex hex hex hex
+
+rule main =
+  parse
+  | '\n'                                     { lexbuf.NewLine()
+                                               main lexbuf }
+  | [' ' '\r' '\t' '\012']+                  { main lexbuf }
+  | ident                                    { ident_or_keyword lexbuf }
+  | decint
+  | hexint
+  | octint
+  | binint                                   { make_int lexbuf }
+  | float                                    { make_float lexbuf }
+  | "\""                                     { string lexbuf.StartPos (StringBuilder()) lexbuf }
+  | "@\""                                    { verbatim_string lexbuf.StartPos (StringBuilder()) lexbuf }
+  | "'"                                      { char_or_var lexbuf.StartPos lexbuf }
+  | "(*"                                     { comment lexbuf.StartPos 1 lexbuf }
+  | "&&"                                     { AMPAMP }
+  | "||"                                     { BARBAR }
+  | "!"                                      { EXCLAMATION }
+  | "("                                      { LPAREN }
+  | ")"                                      { RPAREN }
+  | "*"                                      { STAR }
+  | ","                                      { COMMA }
+  | "->"                                     { MINUSGREATER }
+  | "."                                      { DOT }
+  | ":"                                      { COLON }
+  | "::"                                     { COLONCOLON }
+  | ";"                                      { SEMI }
+  | "<-"                                     { LESSMINUS }
+  | ":="                                     { COLONEQUAL }
+  | "<<"                                     { LESSLESS }
+  | "="                                      { EQUAL }
+  | "=="                                     { EQUALEQUAL }
+  | "["                                      { LBRACKET }
+  | "[|"                                     { LBRACKETBAR }
+  | "]"                                      { RBRACKET }
+  | "_"                                      { UNDERSCORE }
+  | "{"                                      { LBRACE }
+  | "|"                                      { BAR }
+  | "|]"                                     { BARRBRACKET }
+  | "}"                                      { RBRACE }
+  | "-" | "-."                               { SUBTRACTIVE (lexeme_string lexbuf) }
+  | "~-" | "~-." | "~~~"                     { UNARY (lexeme_string lexbuf) }
+  | "<>" | "!="
+  | "<" | ">" |"<=" | ">="                   { COMPARE (lexeme_string lexbuf) }
+  | "@" | "^" | "^^"                         { CONCAT (lexeme_string lexbuf) }
+  | "+" | "+."             
+  | "&&&" | "|||" | "^^^"                    { ADDITIVE (lexeme_string lexbuf) }
+  | "*." | "/" | "/." | "%"                  
+  | ">>>" | "<<<"                            { MULTDIV (lexeme_string lexbuf) }
+  | "**"                                     { STARSTAR }
+  | "//"                                     { eol_comment lexbuf.StartPos lexbuf }
+  | '?'                                      { QMARK }
+  | eof                                      { EOF }
+  | _                                        { raise (Lexical_error Illegal_character) }
+
+and comment start_pos depth = parse
+  | '\n'    { lexbuf.NewLine()
+              comment start_pos depth lexbuf }
+  |  "(*"   { comment start_pos (depth + 1) lexbuf }
+  | "*)"    { if depth = 1 then
+                mark_as_comments lexbuf start_pos lexbuf.EndPos
+                main lexbuf
+              else
+                comment start_pos (depth - 1) lexbuf }
+  | eof     { mark_as_comments lexbuf start_pos lexbuf.StartPos
+              raise(Lexical_error Unterminated_comment) }
+  | _       { comment start_pos depth lexbuf }
+
+and eol_comment start = parse
+  | '\n'    { lexbuf.NewLine(); mark_as_comments lexbuf start lexbuf.EndPos; main lexbuf }
+  | eof     { mark_as_comments lexbuf start lexbuf.StartPos; EOF }
+  | _       { eol_comment start lexbuf }
+
+and char_or_var start_pos = parse
+  | "\n'"                               { lexbuf.NewLine()
+                                          lexbuf.StartPos <- start_pos;
+                                          CHAR (lexbuf.LexemeChar(0)) }
+  | [^ '\\' '''] "'"                    { lexbuf.StartPos <- start_pos;
+                                          CHAR (lexbuf.LexemeChar(0)) }
+  | '\\' ['\\' ''' 'n' 't' 'b' 'r'] "'" { lexbuf.StartPos <- start_pos;
+                                          CHAR ((char_for_backslash (lexbuf.LexemeChar(1)))) }
+  | '\\' dec dec dec "'"                { lexbuf.StartPos <- start_pos;
+                                          CHAR (char_for_dec3_code lexbuf) }
+  | '\\' 'u' hex hex hex hex "'"        { lexbuf.StartPos <- start_pos;
+                                          CHAR (char_for_hex4_code lexbuf) }
+  | ident                               { lexbuf.StartPos <- start_pos;
+                                          QUOTED (String(lexbuf.Lexeme)) }
+  | eof                                  
+  | _                                   { raise (Lexical_error Illegal_character) }
+
+and string start_pos buf = parse
+  | '\n'                                              { lexbuf.NewLine()
+                                                        (buf : StringBuilder).Add('\n')
+                                                        string start_pos buf lexbuf }
+  | '"'                                               { lexbuf.StartPos <- start_pos
+                                                        STRING ((buf : StringBuilder).ToString()) }
+  | '\\' ("\010" | "\013" | "\013\010") [' ' '\009']* { string start_pos buf lexbuf }
+  | '\\' ['\\' '"' 'n' 't' 'b' 'r']                   { (buf : StringBuilder).Add(char_for_backslash(lexbuf.Lexeme.[1]))
+                                                        string start_pos buf lexbuf }
+  | dec3char                                          { (buf : StringBuilder).Add(char_for_dec3_code lexbuf);
+                                                        string start_pos buf lexbuf }
+  | hex4char                                          { (buf : StringBuilder).Add(char_for_hex4_code lexbuf)
+                                                        string start_pos buf lexbuf }
+  | eof                                               { lexbuf.StartPos <- start_pos
+                                                        raise (Lexical_error Unterminated_string) }
+  | _                                                 { (buf : StringBuilder).Add(lexbuf.Lexeme.[0]);
+                                                        string start_pos buf lexbuf }
+
+and verbatim_string start_pos buf = parse
+  | '\n'    { lexbuf.NewLine()
+              (buf : StringBuilder).Add('\n')
+              verbatim_string start_pos buf lexbuf }
+  | '"' '"' { (buf : StringBuilder).Add('\034')
+              verbatim_string start_pos buf lexbuf }
+  | '"'     { lexbuf.StartPos <- start_pos
+              STRING ((buf : StringBuilder).ToString()) }
+  | eof     { lexbuf.StartPos <- start_pos;
+              raise (Lexical_error Unterminated_string) }
+  | _       { (buf : StringBuilder).Add(lexbuf.Lexeme.[0])
+              verbatim_string start_pos buf lexbuf }
