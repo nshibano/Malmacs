@@ -13,12 +13,24 @@ type ColorInfo =
       ciBackColor : Color option
       ciUnderlineColor : Color option
       ciText : string option }
-    
+
+// Terminology
+//
+// Symbol : A 'character' item edited in text editor. It consists of 1 or 2 System.Char. 2-character symbols are either of "\r\n" or surrogate pair.
+//          Press Left/right key will skip one symbol, and press backspace/delete key will remove one symbol.
+//
+// Row : Sequence of symbols displayed horizontally on the editor, or one may call it "visual line". A line contain 1 or more rows.
+//
+// Line : Sequence of symbols in the text which ends with newline symbols ("\r\n", "\r" or "\n"), or ends when there is no more symbols in the file.
+//        The last newline symbol of the line is part of the content of the line.
+//        If a text ends with newline symbol, the final line of the text is empty line (a line that contains zero symbols). 
+//        Empty text contains one empty line.
+
 type Row =
     { String : string
       Colors : ColorInfo array
-      CharOffsets : int array // CharOffsets.Length = Symbols.Length + 1
-      XOffsets : int array // XOffsets.Length = Symbols.Length + 1
+      CharOffsets : int array
+      XOffsets : int array
       IsEndOfLine : bool }
     
     member row.SymbolCount = row.CharOffsets.Length - 1
