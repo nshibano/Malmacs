@@ -45,6 +45,8 @@ let main args =
     try
         let src = File.ReadAllText(initMalPath)
         repl.Run(src)
+        let start = Environment.TickCount
+        while repl.Tick() && Environment.TickCount - start < 1000 do () // run 1000ms to hopefully finish init.mal and get malproc ready.
     with _ -> ()
 
     if args.Length > 0 then

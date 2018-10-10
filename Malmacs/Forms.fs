@@ -262,9 +262,6 @@ and Repl() as this =
 
     let run (src : string) =
         chunkQueue.Add(src)
-        //mal.Start(src)
-        //if mal.State <> State.Running then
-        //    upd()
 
     let key_down (ev : KeyEventArgs) =
         let key = ev.KeyData
@@ -1071,7 +1068,9 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             openPath paths.[0])
 
         upd false
-    
+        resetCaretXPos()
+        repl.RequestHighlighting(this)
+        
     member this.HighlightingState  with get() = highlightingState and set x = highlightingState <- x
     member this.TextArea : OpaqueIMEControl = textArea
     member this.Doc
