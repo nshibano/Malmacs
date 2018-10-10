@@ -1,3 +1,5 @@
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/nshibano/malmacs)](https://ci.appveyor.com/project/nshibano/malmacs/branch/master)
+
 # Malmacs
 
 A Programmable Text Editor for Windows.
