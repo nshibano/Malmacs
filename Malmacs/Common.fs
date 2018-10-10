@@ -9,6 +9,11 @@ open System.Windows.Forms
 open System.Drawing
 open Microsoft.FSharp.NativeInterop
 open System.Text
+open System.IO
+open System.Reflection
+
+let exeDir = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
+let initMalPath = Path.Combine(exeDir, "init.mal")
 
 exception DontCareException
 let dontcare() = raise DontCareException

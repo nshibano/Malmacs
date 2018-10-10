@@ -68,8 +68,8 @@
     <Compile Include="FileHelper.fs" />
     <Compile Include="UndoTree.fs" />
     <Compile Include="MalJson.fs" />
-    <Compile Include="Forms.fs" />
     <Compile Include="MalLibs.fs" />
+    <Compile Include="Forms.fs" />
     <Compile Include="Program.fs" />
     <Content Include="packages.config" />
     <Content Include="init.mal">

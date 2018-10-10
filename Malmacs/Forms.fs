@@ -44,28 +44,15 @@ and Repl() as this =
     let padding = 1
 
     let menu = new MenuStripWithClickThrough()
-    let menu_file = new ToolStripMenuItem("File")
-    let menu_file_new = new ToolStripMenuItem("New")
-    let menu_file_open = new ToolStripMenuItem("Open")
 
     let textArea = new OpaqueIMEControl()
     let vscroll = new VScrollBar()
 
-    let mal = FsMiniMAL.Top.createInterpreter()
+    let mutable mal : (Interpreter * value ref) option = None //FsMiniMAL.Top.createInterpreter()
+    let chunkQueue = List<string>()
+    let messageQueue = List<Message>()
+    let runningQueue = List<MalThread>()
 
-    do
-        for ty in [| typeof<Editor>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
-            mal.RegisterAbstractType(ty.Name.ToLowerInvariant(), ty)
-
-        mal.RegisterFsharpTypes([|
-            ("colorInfo", typeof<ColorInfo>)
-            ("message", typeof<Message>)
-            ("malToken", typeof<FsMiniMAL.Parser.token>)
-            ("json", typeof<MalJson.json>) |])
-        mal.Do("var malproc : message -> unit = ignore")
-    
-    let malproc = mal.GetVar("malproc")
-    
     let cols = 80
 
     let mutable logDoc =
@@ -94,10 +81,6 @@ and Repl() as this =
     let commandAreaRectangle() =
         let clientRect = textArea.ClientRectangle
         Rectangle(clientRect.X, clientRect.Bottom - logDoc.LayoutInfo.LineHeight, clientRect.Width, logDoc.LayoutInfo.LineHeight)
-    
-    let chunkQueue = List<string>()
-    let messageQueue = List<Message>()
-    let runningQueue = List<MalThread>()
 
     let upd() =
 
@@ -182,13 +165,16 @@ and Repl() as this =
     let beep() = System.Media.SystemSounds.Beep.Play()
 
     let initiateHighlighting (e : Editor) =
-        e.HighlightingState <- EHShighlighting
-        let interp = Interpreter(mal.Runtime, Typechk.tyenv_clone mal.Tyenv, alloc.Create(), [||])
-        interp.MessageHook <- mal.MessageHook
-        interp.Store <- false
-        interp.StartApply([| malproc.Value; mal.ValueOfObj(MhighlightingRequired e) |])
-        runningQueue.Add(MThighlighting (e, interp))
-        e.LastlyHighlightingInitiatedContentId <- e.Doc.ContentId
+        match mal with
+        | Some (interp, malproc) -> 
+            e.HighlightingState <- EHShighlighting
+            let interp = Interpreter(interp.Runtime, Typechk.tyenv_clone interp.Tyenv, alloc.Create(), [||])
+            interp.MessageHook <- interp.MessageHook
+            interp.Store <- false
+            interp.StartApply([| malproc.Value; interp.ValueOfObj(MhighlightingRequired e) |])
+            runningQueue.Add(MThighlighting (e, interp))
+            e.LastlyHighlightingInitiatedContentId <- e.Doc.ContentId
+        | None -> ()
     
     let initiateHighlightingIfTextChanged (e : Editor) =
         if e.LastlyHighlightingInitiatedContentId <> e.Doc.ContentId then
@@ -199,24 +185,24 @@ and Repl() as this =
 
     /// returns true when need more time slice
     let tick() =
-        if (not inNestedMessageLoop) then
-            
+        if mal.IsSome && (not inNestedMessageLoop) then
+            let interp, malproc = mal.Value
             // if there is queued chunk, and there is no running chunk thread, start new chunk thread.
             if chunkQueue.Count > 0 && Seq.forall (fun mt -> match mt with MTchunk _ -> false | _ -> true) runningQueue then
                 let chunk = chunkQueue.[0]
                 chunkQueue.RemoveAt(0)
-                mal.Store <- false
-                mal.Start(chunk)
+                interp.Store <- false
+                interp.Start(chunk)
                 runningQueue.Add(MTchunk chunk)
             
             // if there is queued message, and there is no running message thread, start new message thread.
             if messageQueue.Count > 0 && Seq.forall (fun mt -> match mt with MTmessage _ -> false | _ -> true) runningQueue then
                 let message = messageQueue.[0]
                 messageQueue.RemoveAt(0)
-                let interp = Interpreter(mal.Runtime, Typechk.tyenv_clone mal.Tyenv, alloc.Create(), [||])
+                let interp = Interpreter(interp.Runtime, Typechk.tyenv_clone interp.Tyenv, alloc.Create(), [||])
                 interp.Store <- false
-                interp.MessageHook <- mal.MessageHook
-                interp.StartApply([| malproc.Value; mal.ValueOfObj(message) |])
+                interp.MessageHook <- interp.MessageHook
+                interp.StartApply([| malproc.Value; interp.ValueOfObj(message) |])
                 runningQueue.Add(MTmessage (message, interp))
             
             // if the thread on the queue top is a highlighting thread, and it needs to be restarted, and its intterupt flag is set, restart it. Repeat that until there is no more.
@@ -236,7 +222,7 @@ and Repl() as this =
                 let mt = runningQueue.[0]
                 let interp =
                     match mt with
-                    | MTchunk _ -> mal
+                    | MTchunk _ -> interp
                     | MTmessage (_, interp) -> interp
                     | MThighlighting (_, interp) -> interp
 
@@ -357,15 +343,213 @@ and Repl() as this =
     let messageHook msg =
         match msg with
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
-        //| FsMiniMAL.Message.UncaughtException _ when mal.OperationCancelled -> ()
         | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.Ja 80 msg)
+    
+    let editorGetTextCoroutineStarter (mm : memory_manager) (argv : value array) =
+        let e = to_obj argv.[0] :?> Editor
+        let doc = e.Doc
+        let mutable state = 0
+        let mutable i = 0
+        let sb = StringBuilder()
+
+        { new IMalCoroutine with
+            member x.Run(slice) =
+                if e.IsDisposed then state <- 3
+                //if cancellable && mal.OperationCancelled then state <- 2
+                let timestampAtStart = Environment.TickCount
+                while state = 0 && Environment.TickCount - timestampAtStart < slice do
+                    if i < doc.RowTree.Count then
+                        let row = doc.RowTree.[i]
+                        sb.Add(row.String)
+                        i <- i + 1
+                    else
+                        state <- 1
+
+            member x.IsFinished = state <> 0
+            member x.Result =
+                match state with
+                | 1 -> of_string mm (sb.ToString())
+                | 3 -> mal_failwith mm "editorGetText: The editor has been disposed."
+                | _ -> dontcare()
+            member x.Dispose() = () }
+
+    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (cancellable : bool) (mm : memory_manager) (argv : value array) =
+        let e = to_obj argv.[0] :?> Editor
+        let ary = to_malarray argv.[1]
+        let mutable state = 0
+        let mutable i = 0
+        let mutable latestValue = mal.ValueOfObj<ColorInfo>(Doc.ColorInfo_Default)
+        let mutable latestObj = Doc.ColorInfo_Default
+        let colorInfoAt i =
+            let v = ary.storage.[i]
+            if LanguagePrimitives.PhysicalEquality v latestValue then
+                latestObj
+            else
+                let x = mal.ObjOfValue<ColorInfo>(v)
+                latestValue <- v
+                latestObj <- x
+                x
+        let doc = e.Doc
+        let mutable rowAccu = MeasuredTreeList<Row, RowTreeInfo>(Doc.rowTreeFunc, Doc.RowTreeInfo_Zero)
+
+        { new IMalCoroutine with
+            member x.Run(slice) =
+                if e.IsDisposed then state <- 3
+                let timestampAtStart = Environment.TickCount
+                while state = 0 && Environment.TickCount - timestampAtStart < slice do
+                    if i < doc.RowTree.Count then
+                        let row = doc.RowTree.[i]
+                        let rowRange = Doc.getCharRangeFromRowIndex doc i
+                        let colors =
+                            Array.init row.SymbolCount (fun j ->
+                                let ofs = rowRange.Begin + row.CharOffsets.[j]
+                                if ofs < ary.count then
+                                    colorInfoAt ofs
+                                else
+                                    Doc.ColorInfo_Default)
+                        rowAccu <- rowAccu.Add({ row with Colors = colors })
+                        i <- i + 1
+                    else
+                        let newDoc = { doc with RowTree = rowAccu }
+                        if LanguagePrimitives.PhysicalEquality e.Doc doc then
+                            e.Amend(newDoc)
+                            e.TextArea.Invalidate()
+                            state <- 1
+                        else
+                            state <- 2
+
+            member x.IsFinished = state <> 0
+            member x.Result =
+                match state with
+                | 1 -> Value.unit
+                | 2 -> mal_failwith mm "editorSetColor: The text has been modified."
+                | 3 -> mal_failwith mm "editorSetColor: The editor has been disposed."
+                | _ -> dontcare()
+            member x.Dispose() = () }
+    
+    let boot() =
+        let interp = FsMiniMAL.Top.createInterpreter()
+
+        for ty in [| typeof<Editor>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
+            interp.RegisterAbstractType(ty.Name.ToLowerInvariant(), ty)
+
+        interp.RegisterFsharpTypes([|
+            ("colorInfo", typeof<ColorInfo>)
+            ("message", typeof<Message>)
+            ("malToken", typeof<FsMiniMAL.Parser.token>)
+            ("json", typeof<MalJson.json>) |])
+        interp.Do("var malproc : message -> unit = ignore")
+    
+        let malproc = interp.GetVar("malproc")
+
+        MalLibs.add interp
+
+        interp.Fun("printString", (fun mm s -> logInput s))
+        interp.Set("printUValue", Vfunc (1, (fun mm argv ->
+            let s = 
+                if box argv.[0] = null
+                then "<null>\r\n"
+                else Printf.sprintf "%A" argv.[0]
+            logInput s
+            Value.unit)), Types.arrow Types.ty_a Types.ty_unit)
+        interp.Fun("sei", (fun mm () ->
+            let i = this.RunningInterp
+            i.Store <- true
+            i.State <- State.Paused))
+        interp.Fun("cli", (fun mm () ->
+            let i = this.RunningInterp
+            i.Store <- false
+            i.State <- State.Paused))
+
+        let malEnsureEditorIsOk mm (e : Editor) =
+            if e.IsDisposed then mal_failwith mm "The editor has been disposed"
+
+        interp.Fun("getEditor", (fun mm () ->
+            match this.SelectedEditor with
+            | Some e -> e
+            | None -> mal_failwith mm "There is no selected editor."))
+        interp.Fun("getEditors", (fun mm () -> editors.ToArray()))
+
+        interp.Fun("editorGetFilename", (fun mm (e : Editor) ->
+            malEnsureEditorIsOk mm e
+            match e.TextFileHandle with
+            | Some h -> h.OriginalPath
+            | None -> ""))
+
+        interp.Set("editorGetText", Vcoroutine (1, editorGetTextCoroutineStarter), interp.Typeof<Editor -> string>())
+
+        interp.Fun("editorSetText", (fun mm (e : Editor) (s : string) ->
+            malEnsureEditorIsOk mm e
+            e.EditorText <- s))
+        interp.Fun("editorInitiateHighlighting", (fun mm (e : Editor) -> this.InitiateHighlighting(e)))
+        interp.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter interp false), interp.Typeof<Editor -> ColorInfo array -> unit>())
+        interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
+
+        let parse src =
+            let lexbuf = FsMiniMAL.Lexing.LexBuffer<char>.FromString src
+            lexbuf.EndPos <- { lexbuf.EndPos with pos_fname = dummy_file_name }
+            lexbuf.BufferLocalStore.["src"] <- src
+            try
+                let cmds, _ = Parser.Program Lexer.main lexbuf
+                Ok cmds
+            with
+            | LexHelper.Lexical_error lex_err ->
+                let loc : FsMiniMAL.Syntax.location = { src = src; st = lexbuf.StartPos; ed = lexbuf.EndPos }
+                Error (FsMiniMAL.Message.LexicalError (lex_err, loc))
+            | Failure "parse error" ->
+                let loc : FsMiniMAL.Syntax.location = { src = src; st = lexbuf.StartPos; ed = lexbuf.EndPos }
+                Error (FsMiniMAL.Message.SyntaxError loc)
+    
+        let rangeOfLocation (loc : FsMiniMAL.Syntax.location) =
+            (loc.st.AbsoluteOffset, loc.ed.AbsoluteOffset)
+
+        interp.Fun("malTypecheck", fun mm src ->
+            match parse src with
+            | Error (FsMiniMAL.Message.LexicalError (_, loc) as msg) ->
+                let s = Printer.print_message Printer.lang.Ja 1000 msg
+                let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
+                Some (s, rangeOfLocation loc)
+            | Error (FsMiniMAL.Message.SyntaxError loc as msg) ->
+                let s = Printer.print_message Printer.lang.Ja 1000 msg 
+                let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
+                Some (s, rangeOfLocation loc)
+            | Error _ -> dontcare()
+            | Ok cmds ->
+                let warning_sink (err : FsMiniMAL.Typechk.type_error_desc, loc : FsMiniMAL.Syntax.location) = ()
+                let tyenv = Typechk.tyenv_clone interp.Tyenv
+
+                try
+                    Typechk.type_command_list warning_sink tyenv cmds |> ignore
+                    None
+                with FsMiniMAL.Typechk.Type_error (err, loc) ->
+                    let s = Printer.print_typechk_error Printer.lang.Ja 1000 err
+                    let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
+                    Some (s, rangeOfLocation loc))
+
+
+        interp.MessageHook <- messageHook
+        try
+            let src = File.ReadAllText(Common.initMalPath)
+            run src
+        with _ -> ()
+        mal <- Some (interp, malproc)
+    
+    let shutdown() =
+        mal <- None
+        chunkQueue.Clear()
+        messageQueue.Clear()
+        runningQueue.Clear()
 
     do
         this.Icon <- new Icon(System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Malmacs.PlayIcon.ico"))
         this.Text <- "Repl"
-        menu_file.DropDownItems.Add(menu_file_new) |> ignore
-        menu_file.DropDownItems.Add(menu_file_open) |> ignore
-        menu.Items.Add(menu_file) |> ignore
+        
+        menu.Items.Add(
+            new ToolStripMenuItem("File", null,
+                new ToolStripMenuItem("New", null, fun o ev -> new_editor()),
+                new ToolStripMenuItem("Open", null, fun o ev -> open_file_with_new_editor()),
+                new ToolStripMenuItem("Boot", null, (fun o ev -> boot())),
+                new ToolStripMenuItem("Shutdown", null, fun o ev -> shutdown()))) |> ignore
 
         textArea.Paint.Add(paint)
         textArea.KeyPress.Add(key_press)
@@ -392,38 +576,16 @@ and Repl() as this =
         this.ClientSize <- Size(800, 450)
         this.SizeChanged.Add(fun ev -> upd())
 
-        menu_file_new.Click.Add(fun ev -> new_editor())
-        menu_file_open.Click.Add(fun ev -> open_file_with_new_editor())
-
         vscroll.Scroll.Add(fun ev ->
             topRowIndex <- ev.NewValue
             upd())
 
-        mal.Fun("printString", (fun mm s -> logInput s))
-        mal.Set("printUValue", Vfunc (1, (fun mm argv ->
-            let s = 
-                if box argv.[0] = null
-                then "<null>\r\n"
-                else Printf.sprintf "%A" argv.[0]
-            logInput s
-            Value.unit)), Types.arrow Types.ty_a Types.ty_unit)
-        mal.Fun("sei", (fun mm () ->
-            let i = this.RunningInterp
-            i.Store <- true
-            i.State <- State.Paused))
-        mal.Fun("cli", (fun mm () ->
-            let i = this.RunningInterp
-            i.Store <- false
-            i.State <- State.Paused))
-
-        mal.MessageHook <- messageHook
-
         upd()
+        boot()
     
-    member this.Mal = mal
     member this.RunningInterp : Interpreter =
         match runningQueue.[0] with
-        | MTchunk _ -> mal
+        | MTchunk _ -> fst mal.Value
         | MTmessage (_, i) -> i
         | MThighlighting (_, i) -> i
     member this.Editors = editors

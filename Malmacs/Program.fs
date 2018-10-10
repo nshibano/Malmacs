@@ -24,28 +24,19 @@ let main args =
     Application.SetCompatibleTextRenderingDefault(false)
     
     let repl = new Repl()
-    MalLibs.add repl
 
-    let exeDir = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
+    //let configJsonPath = Path.Combine(exeDir, "config.json")
+    //let configJson = readJson "Config" configJsonPath
 
-    let configJsonPath = Path.Combine(exeDir, "config.json")
-    let configJson = readJson "Config" configJsonPath
-
-    let persistentJsonPath = Path.Combine(exeDir, "persistent.json")
-    let persistentJson = readJson "Persistent" persistentJsonPath
-    let persistentJsonOfs = repl.Mal.Var("persistent_json", persistentJson)
+    //let persistentJsonPath = Path.Combine(exeDir, "persistent.json")
+    //let persistentJson = readJson "Persistent" persistentJsonPath
+    //let persistentJsonOfs = repl.Mal.Var("persistent_json", persistentJson)
 
     Application.Idle.Add(fun ev ->
         if repl.Editors.Count = 0 then
             Application.Exit()
         let mutable m = Win32.Message()
         while (not (Win32.PeekMessage(&m, IntPtr.Zero, 0u, 0u, 0u))) && repl.Tick() do ())
-
-    let initMalPath = Path.Combine(exeDir, "init.mal")
-    try
-        let src = File.ReadAllText(initMalPath)
-        repl.Run(src)
-    with _ -> ()
 
     if args.Length > 0 then
         repl.OpenPathWithNewEditor(args.[0])
@@ -54,16 +45,16 @@ let main args =
 
     Application.Run()
 
-    let json =
-        try repl.Mal.GetFromOfs(persistentJsonOfs)
-        with _ -> MalJson.json.Jobject [||]
-    let json =
-        match json with
-        | MalJson.json.Jobject _
-        | MalJson.json.Jarray _ -> json
-        | _ -> MalJson.json.Jobject [|("root_atom_backup", json)|]
-    try
-        File.WriteAllText(persistentJsonPath, json.ToString(false))
-    with exn ->
-        Debug.WriteLine(sprintf "Persistent json write failed: %s" exn.Message)
+    //let json =
+    //    try repl.Mal.GetFromOfs(persistentJsonOfs)
+    //    with _ -> MalJson.json.Jobject [||]
+    //let json =
+    //    match json with
+    //    | MalJson.json.Jobject _
+    //    | MalJson.json.Jarray _ -> json
+    //    | _ -> MalJson.json.Jobject [|("root_atom_backup", json)|]
+    //try
+    //    File.WriteAllText(persistentJsonPath, json.ToString(false))
+    //with exn ->
+    //    Debug.WriteLine(sprintf "Persistent json write failed: %s" exn.Message)
     0
