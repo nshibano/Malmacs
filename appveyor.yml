@@ -5,7 +5,7 @@ shallow_clone: true
 before_build:
 - cmd: nuget restore
 build:
-  project: src
+  project: Malmacs
   verbosity: minimal
 after_build:
 - cmd: '"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" Malmacs.iss'
