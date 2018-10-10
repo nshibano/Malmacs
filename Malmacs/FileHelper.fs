@@ -182,7 +182,7 @@ let tryOpen (oldHandle : TextFileHandle option)  : TryOpenResult =
         comboBox.Items.Add(CommonFileDialogComboBoxItem(name))
     comboBox.SelectedIndex <- 0
     dialog.Controls.Add(comboBox)
-    match applyWithInNestedMessageLoopFlagSet (fun () -> dialog.ShowDialog()) () with
+    match applyWithInNestedMessageLoopFlagSet (fun () -> dialog.ShowDialog(Form.ActiveForm.Handle)) () with
     | CommonFileDialogResult.Ok ->
         Option.iter (fun (f : TextFileHandle) -> f.FileStream.Close()) oldHandle
         let mutable fd = null : FileStream
@@ -244,7 +244,7 @@ let trySaveAs (oldHandle : TextFileHandle option) (newText : string) =
         | Some h -> Array.findIndex (fun (_, enc) -> enc = h.TextEncoding) encodings
         | None -> 0
     dialog.Controls.Add(comboBox)
-    match applyWithInNestedMessageLoopFlagSet (fun () -> dialog.ShowDialog()) () with
+    match applyWithInNestedMessageLoopFlagSet (fun () -> dialog.ShowDialog(Form.ActiveForm.Handle)) () with
     | CommonFileDialogResult.Ok ->
         match oldHandle with
         | Some h -> h.FileStream.Dispose()
