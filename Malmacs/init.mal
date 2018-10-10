@@ -1,6 +1,6 @@
 ﻿(* syntax highlighting for FsMiniMAL *)
 
-type token = Lower | Upper | Number | Eof | Keyword | Comment;
+type token = Lower | Upper | Literal | Eof | Keyword | Comment | Lparen | Rparen | Colon;
 
 lex {
   val letter = ['a'-'z' 'A'-'Z'];
@@ -11,17 +11,20 @@ lex {
     "type"|"of"|"else"|"for"|"to"|"do" { Keyword }
     ['a'-'z'] (letter|digit|'_')* { Lower }
     ['A'-'Z'] (letter|digit|'_')* { Upper }
-    digit (letter|digit)*         { Number }
-    '\'' _ '\''                   { Number }
-    "'\\''"                       { Number }
-    "'\\" letter "'"              { Number }
+    digit (letter|digit)* |         
+    '\'' _ '\'' |
+    "'\\''" |
+    "'\\" letter "'"              { Literal }
     '"'                           { string lexbuf.lbStartPos lexbuf }
     "(*"                          { comment lexbuf.lbStartPos 1 lexbuf }
     "//"                          { eolComment lexbuf.lbStartPos lexbuf }
     eof                           { Eof }
+    "("                           { Lparen }
+    ")"                           { Rparen }
+    ":"                           { Colon }
     _                             { token lexbuf }
   and string st =
-    '"' | eof { (lexbuf.lbStartPos <- st; Number) }
+    '"' | eof { (lexbuf.lbStartPos <- st; Literal) }
     _         { string st lexbuf }
   and comment st level =
     "*)" | eof { if level = 1 then (lexbuf.lbStartPos <- st; Comment ) else comment st (level - 1) lexbuf }
@@ -47,6 +50,7 @@ fun getLastSymbolRange (s : string) =
 fun highlightMal (s : string) (accu : colorInfo array) =
   begin
     val lb = lexbufCreate s;
+    var state = None;
     fun set rgb =
       begin
         val ci = { ciDefault with ciForeColor = Some (colorOfRgb rgb) };
@@ -54,15 +58,19 @@ fun highlightMal (s : string) (accu : colorInfo array) =
           accu.[i] <- ci;
       end;
     while not lb.lbEof do
-      begin
         case token lb of
-          | Lower ->  set 0xE00000
-          | Upper ->  set 0x0000FF
-          | Number -> set 0x808000
+          | Lower ->
+            (case state of
+              | None -> set 0xD00000
+              | Some _ -> set 0x800080)
+          | Upper ->  set 0x0000D0
+          | Literal -> set 0x808000
           | Keyword -> set 0x008000
           | Comment -> set 0x808080
+          | Colon -> (case state of None -> state <- Some 0 | _ -> ())
+          | Rparen -> (case state of None -> () | Some 0 -> state <- None | Some n -> state <- Some (n - 1))
+          | Lparen -> (case state of None -> () | Some n -> state <- Some (n + 1))
           | Eof -> ();
-      end;
     case malTypecheck s of
     | Some (msg, (st, ed)) ->
       begin

@@ -393,7 +393,6 @@ and Repl() as this =
         interp.RegisterFsharpTypes([|
             ("colorInfo", typeof<ColorInfo>)
             ("message", typeof<Message>)
-            ("malToken", typeof<FsMiniMAL.Parser.token>)
             ("json", typeof<MalJson.json>) |])
         interp.Do("var malproc : message -> unit = ignore")
     
