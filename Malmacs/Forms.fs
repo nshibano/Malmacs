@@ -170,8 +170,8 @@ and Repl() as this =
     let beep() = System.Media.SystemSounds.Beep.Play()
 
     let initiateHighlighting (e : Editor) =
-        match mal with
-        | Some (interp, malproc) -> 
+        match mal, e.HighlightingState with
+        | Some (interp, malproc), EHSdone ->
             e.HighlightingState <- EHShighlighting
             let interp = Interpreter(interp.Runtime, Typechk.tyenv_clone interp.Tyenv, alloc.Create(), [||])
             interp.MessageHook <- interp.MessageHook
@@ -179,14 +179,12 @@ and Repl() as this =
             interp.StartApply([| malproc.Value; interp.ValueOfObj(MhighlightingRequired e) |])
             runningQueue.Add(MThighlighting (e, interp))
             e.LastlyHighlightingInitiatedContentId <- e.Doc.ContentId
-        | None -> ()
+        | Some _, EHShighlighting -> e.HighlightingState <- EHSneedRestart
+        | _ -> ()
     
     let initiateHighlightingIfTextChanged (e : Editor) =
         if e.LastlyHighlightingInitiatedContentId <> e.Doc.ContentId then
-            match e.HighlightingState with
-            | EHSdone -> initiateHighlighting e
-            | EHShighlighting -> e.HighlightingState <- EHSneedRestart
-            | EHSneedRestart -> ()
+            initiateHighlighting e
 
     /// returns true when need more time slice
     let tick() =
@@ -540,7 +538,6 @@ and Repl() as this =
                     let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
                     Some (s, rangeOfLocation loc))
 
-
         interp.MessageHook <- messageHook
         try
             let src = File.ReadAllText(Common.initMalPath)
@@ -554,6 +551,9 @@ and Repl() as this =
         chunkQueue.Clear()
         messageQueue.Clear()
         runningQueue.Clear()
+        for e in editors do
+            e.HighlightingState <- EHSdone
+            e.LastlyHighlightingInitiatedContentId <- -1
         logInput "Interpreter has been shut down.\r\n"
         upd()
 
