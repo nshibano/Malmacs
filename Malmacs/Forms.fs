@@ -181,19 +181,21 @@ and Repl() as this =
 
     let beep() = System.Media.SystemSounds.Beep.Play()
 
-    let startHighlighting (e : Editor) =
+    let initiateHighlighting (e : Editor) =
         e.HighlightingState <- EHShighlighting
         let interp = Interpreter(mal.Runtime, Typechk.tyenv_clone mal.Tyenv, alloc.Create(), [||])
         interp.MessageHook <- mal.MessageHook
         interp.Store <- false
         interp.StartApply([| malproc.Value; mal.ValueOfObj(MhighlightingRequired e) |])
         runningQueue.Add(MThighlighting (e, interp))
+        e.LastlyHighlightingInitiatedContentId <- e.Doc.ContentId
     
-    let requestHighlighting (e : Editor) =
-        match e.HighlightingState with
-        | EHSdone -> startHighlighting e
-        | EHShighlighting -> e.HighlightingState <- EHSneedRestart
-        | EHSneedRestart -> ()
+    let initiateHighlightingIfTextChanged (e : Editor) =
+        if e.LastlyHighlightingInitiatedContentId <> e.Doc.ContentId then
+            match e.HighlightingState with
+            | EHSdone -> initiateHighlighting e
+            | EHShighlighting -> e.HighlightingState <- EHSneedRestart
+            | EHSneedRestart -> ()
 
     /// returns true when need more time slice
     let tick() =
@@ -225,7 +227,7 @@ and Repl() as this =
                        e.HighlightingState = EHSneedRestart &&
                        (i.Store :?> bool) &&
                        (runningQueue.RemoveAt(0)
-                        startHighlighting e
+                        initiateHighlighting e
                         true)
                    | _ -> false) do ()
 
@@ -246,7 +248,7 @@ and Repl() as this =
                     match mt with
                     | MThighlighting (e, _) ->
                         match e.HighlightingState with
-                        | EHSneedRestart -> startHighlighting(e)
+                        | EHSneedRestart -> initiateHighlighting(e)
                         | EHShighlighting -> e.HighlightingState <- EHSdone
                         | EHSdone -> dontcare()
                     | _ -> ()
@@ -431,7 +433,8 @@ and Repl() as this =
     member this.OpenPathWithNewEditor path = open_path_with_new_editor path
     member this.Run(src : string) = run src
     member this.Tick() = tick()
-    member this.RequestHighlighting e = requestHighlighting e
+    member this.InitiateHighlighting e = initiateHighlighting e
+    member this.InitiateHighlightingIfTextChanged e = initiateHighlightingIfTextChanged e
 
     override this.OnFormClosing(ev) =
         if ev.CloseReason <> CloseReason.ApplicationExitCall then
@@ -462,6 +465,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
 
     let mutable state = EditorState.Idle
     let mutable highlightingState = EditorHighlightingState.EHSdone
+    let mutable lastlyHighlightingInitiatedContentId = -1
     let mutable hasCaret = false
     let undoTree : UndoTree<Doc> = UndoTree.Create(Doc.createFromString (DocLayoutInfo.Default (20 / 2 * cols) 20) (match textFileHandle with Some handle -> handle.LatestText | None -> ""))
     let mutable lastlySavedRevision = 0
@@ -493,7 +497,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             undoTree.Undo()
             clearColor()
             resetCaretXPos()
-            repl.RequestHighlighting(this)
 
     let redo() =
         if undoTree.CanRedo then
@@ -501,7 +504,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             undoTree.Redo()
             clearColor()
             resetCaretXPos()
-            repl.RequestHighlighting(this)
 
     let maximumAmendPeriod = TimeSpan.FromSeconds(1.0)
 
@@ -512,7 +514,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         else
             undoTree.Amend(newDoc)
         resetCaretXPos()
-        repl.RequestHighlighting(this)
 
     let beep() = System.Media.SystemSounds.Beep.Play()
     
@@ -585,6 +586,8 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             match textFileHandle with
             | Some handle -> sprintf "%s (%s) - Malmacs" (Path.GetFileName(handle.OriginalPath)) (Path.GetDirectoryName(handle.OriginalPath))
             | None -> "Untitled - Malmacs"
+
+        repl.InitiateHighlightingIfTextChanged(this)
     
     let input_upd (atomic : bool) (s : string) =
         let newDoc = Doc.replace undoTree.Get s
@@ -882,8 +885,8 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             let newLayoutInfo = DocLayoutInfo.Default (newSize / 2 * cols) newSize
             undoTree.Amend(Doc.changeLayout newLayoutInfo undoTree.Get)
             resetCaretXPos()
-            repl.RequestHighlighting(this)
             upd false
+            repl.InitiateHighlighting(this)
         else
             wheel_accu <- wheel_accu + ev.Delta
             let scroll =
@@ -943,7 +946,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
                 topRowIndex <- 0
                 lastlySavedRevision <- 0
                 resetCaretXPos()
-                repl.RequestHighlighting(this)
                 upd false
             | TOPRfailed exn ->
                 applyWithInNestedMessageLoopFlagSet (fun () -> MessageBox.Show(exn.Message) |> ignore) ()
@@ -965,7 +967,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
                 topRowIndex <- 0
                 lastlySavedRevision <- 0
                 resetCaretXPos()
-                repl.RequestHighlighting(this)
         upd false
     
     let saveas_upd() =
@@ -1011,10 +1012,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             upd false)
         textArea.LostFocus.Add(fun ev ->
             upd false)
-        this.Resize.Add(fun ev ->
-            resetCaretXPos()
-            repl.RequestHighlighting(this)
-            upd false)
+        this.Resize.Add(fun ev -> upd false)
         textArea.MouseDown.Add(mouseDown)
         textArea.MouseUp.Add(mouseUp)
         textArea.MouseDoubleClick.Add(mouseDoubleClick)
@@ -1069,14 +1067,12 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
 
         upd false
         resetCaretXPos()
-        repl.RequestHighlighting(this)
         
-    member this.HighlightingState  with get() = highlightingState and set x = highlightingState <- x
+    member this.HighlightingState with get() = highlightingState and set x = highlightingState <- x
+    member this.LastlyHighlightingInitiatedContentId with get() = lastlyHighlightingInitiatedContentId and set x = lastlyHighlightingInitiatedContentId <- x
     member this.TextArea : OpaqueIMEControl = textArea
-    member this.Doc
-        with get() = undoTree.Get
-        and set x =
-            undoTree.Amend(x)
+    member this.Doc = undoTree.Get
+    member this.Amend newDoc = undoTree.Amend(newDoc)
     
     member this.EditorText
         with get() = Doc.getAllString undoTree.Get

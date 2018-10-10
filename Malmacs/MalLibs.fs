@@ -87,7 +87,7 @@ let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (cancellable : bool) 
                 else
                     let newDoc = { doc with RowTree = rowAccu }
                     if LanguagePrimitives.PhysicalEquality e.Doc doc then
-                        e.Doc <- newDoc
+                        e.Amend(newDoc)
                         e.TextArea.Invalidate()
                         state <- 1
                     else
@@ -206,7 +206,7 @@ let add (repl : Repl) =
     mal.Fun("editorSetText", (fun mm (e : Editor) (s : string) ->
         malEnsureEditorIsOk mm e
         e.EditorText <- s))
-    mal.Fun("editorRequestHighlighting", (fun mm (e : Editor) -> repl.RequestHighlighting(e)))
+    mal.Fun("editorInitiateHighlighting", (fun mm (e : Editor) -> repl.InitiateHighlighting(e)))
     mal.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter mal false), mal.Typeof<Editor -> ColorInfo array -> unit>())
     mal.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 

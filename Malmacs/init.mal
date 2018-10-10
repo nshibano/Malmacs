@@ -105,18 +105,18 @@ malproc <-
             editorSetColor editor accu
         end);
 
-fun requestHighlighting() = arrayIter editorRequestHighlighting (getEditors());
+fun initiateHighlighting() = arrayIter editorInitiateHighlighting (getEditors());
 
 fun hlt (keyword : string) =
     begin
         highlightingKeywords << keyword;
-        requestHighlighting()
+        initiateHighlighting()
     end;
 
 fun clr() =
     begin
         arrayClear highlightingKeywords;
-        requestHighlighting()
+        initiateHighlighting()
     end;
 
-requestHighlighting()
+initiateHighlighting()
