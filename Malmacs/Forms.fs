@@ -112,6 +112,11 @@ and Repl() as this =
             Win32.DestroyCaret() |> ignore
             hasCaret <- false
         textArea.Invalidate()
+
+        let menu_file_boot = (menu.Items.[0] :?> ToolStripMenuItem).DropDownItems.[2] :?> ToolStripMenuItem        
+        let menu_file_shutdown = (menu.Items.[0] :?> ToolStripMenuItem).DropDownItems.[3] :?> ToolStripMenuItem
+        menu_file_boot.Enabled <- mal.IsNone
+        menu_file_shutdown.Enabled <- mal.IsSome
     
     let paint (ev : PaintEventArgs) =
         let clientRect = textArea.ClientRectangle
@@ -427,7 +432,9 @@ and Repl() as this =
                 | _ -> dontcare()
             member x.Dispose() = () }
     
-    let boot() =
+    let bootUpd() =
+        logInput "Booting interpreter.\r\n"
+
         let interp = FsMiniMAL.Top.createInterpreter()
 
         for ty in [| typeof<Editor>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
@@ -533,12 +540,15 @@ and Repl() as this =
             run src
         with _ -> ()
         mal <- Some (interp, malproc)
+        upd()
     
-    let shutdown() =
+    let shutdownUpd() =
         mal <- None
         chunkQueue.Clear()
         messageQueue.Clear()
         runningQueue.Clear()
+        logInput "Interpreter has been shut down.\r\n"
+        upd()
 
     do
         this.Icon <- new Icon(System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Malmacs.PlayIcon.ico"))
@@ -548,8 +558,8 @@ and Repl() as this =
             new ToolStripMenuItem("File", null,
                 new ToolStripMenuItem("New", null, fun o ev -> new_editor()),
                 new ToolStripMenuItem("Open", null, fun o ev -> open_file_with_new_editor()),
-                new ToolStripMenuItem("Boot", null, (fun o ev -> boot())),
-                new ToolStripMenuItem("Shutdown", null, fun o ev -> shutdown()))) |> ignore
+                new ToolStripMenuItem("Boot", null, (fun o ev -> bootUpd())),
+                new ToolStripMenuItem("Shutdown", null, fun o ev -> shutdownUpd()))) |> ignore
 
         textArea.Paint.Add(paint)
         textArea.KeyPress.Add(key_press)
@@ -580,8 +590,7 @@ and Repl() as this =
             topRowIndex <- ev.NewValue
             upd())
 
-        upd()
-        boot()
+        bootUpd()
     
     member this.RunningInterp : Interpreter =
         match runningQueue.[0] with
