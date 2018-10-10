@@ -69,7 +69,7 @@ and Repl() as this =
     let mutable topRowIndex = 0
 
     let history = List<string>()
-    let mutable historyPos = 0 // [0 : history.Count]
+    let mutable historyPos = 0 // [0, history.Count]
 
     let editors = List<Editor>()
     let mutable selectedEditor : Editor option = None
@@ -459,12 +459,19 @@ and Repl() as this =
                 else Printf.sprintf "%A" argv.[0]
             logInput s
             Value.unit)), Types.arrow Types.ty_a Types.ty_unit)
+
+        let runningInterp() =
+            match runningQueue.[0] with
+            | MTchunk _ -> fst mal.Value
+            | MTmessage (_, i) -> i
+            | MThighlighting (_, i) -> i
+
         interp.Fun("sei", (fun mm () ->
-            let i = this.RunningInterp
+            let i = runningInterp()
             i.Store <- true
             i.State <- State.Paused))
         interp.Fun("cli", (fun mm () ->
-            let i = this.RunningInterp
+            let i = runningInterp()
             i.Store <- false
             i.State <- State.Paused))
 
@@ -592,11 +599,6 @@ and Repl() as this =
 
         bootUpd()
     
-    member this.RunningInterp : Interpreter =
-        match runningQueue.[0] with
-        | MTchunk _ -> fst mal.Value
-        | MTmessage (_, i) -> i
-        | MThighlighting (_, i) -> i
     member this.Editors = editors
     member this.SelectedEditor with get() = selectedEditor and set x = selectedEditor <- x
     member this.NewEditor() = new_editor()
