@@ -14,17 +14,22 @@ lex {
     digit (letter|digit)*         { Number }
     '\'' _ '\''                   { Number }
     "'\\''"                       { Number }
+    "'\\" letter "'"              { Number }
     '"'                           { string lexbuf.lbStartPos lexbuf }
     "(*"                          { comment lexbuf.lbStartPos 1 lexbuf }
+    "//"                          { eolComment lexbuf.lbStartPos lexbuf }
     eof                           { Eof }
     _                             { token lexbuf }
   and string st =
     '"' | eof { (lexbuf.lbStartPos <- st; Number) }
-    _    { string st lexbuf }
+    _         { string st lexbuf }
   and comment st level =
-    "*)" | eof { if level = 1 then begin lexbuf.lbStartPos <- st; Comment end else comment st (level - 1) lexbuf }
+    "*)" | eof { if level = 1 then (lexbuf.lbStartPos <- st; Comment ) else comment st (level - 1) lexbuf }
     "(*" { comment st (level + 1) lexbuf }
-    _    { comment st level lexbuf }};
+    _    { comment st level lexbuf }
+  and eolComment st =
+    "\r\n"| "\n" | "\r" | eof { (lexbuf.lbStartPos <- st; Comment) }
+    _                         { eolComment st lexbuf }};
 
 val ciDefault = { ciForeColor = None, ciBackColor = None, ciUnderlineColor = None, ciText = None };
 val ciError = { ciDefault with ciUnderlineColor = Some (colorOfRgb 0xFF0000) };
@@ -53,8 +58,8 @@ fun highlightMal (s : string) (accu : colorInfo array) =
         case token lb of
           | Lower ->  set 0xE00000
           | Upper ->  set 0x0000FF
-          | Number -> set 0x00FF00
-          | Keyword -> set 0x808000
+          | Number -> set 0x808000
+          | Keyword -> set 0x008000
           | Comment -> set 0x808080
           | Eof -> ();
       end;

@@ -216,6 +216,7 @@ and Repl() as this =
                        e.HighlightingState = EHSneedRestart &&
                        (i.Store :?> bool) &&
                        (runningQueue.RemoveAt(0)
+                        e.HighlightingState <- EHSdone
                         initiateHighlighting e
                         true)
                    | _ -> false) do ()
@@ -237,8 +238,11 @@ and Repl() as this =
                     match mt with
                     | MThighlighting (e, _) ->
                         match e.HighlightingState with
-                        | EHSneedRestart -> initiateHighlighting(e)
-                        | EHShighlighting -> e.HighlightingState <- EHSdone
+                        | EHSneedRestart ->
+                            e.HighlightingState <- EHSdone
+                            initiateHighlighting(e)
+                        | EHShighlighting ->
+                            e.HighlightingState <- EHSdone
                         | EHSdone -> dontcare()
                     | _ -> ()
                 elif interp.Store :?> bool then
@@ -253,57 +257,6 @@ and Repl() as this =
 
     let run (src : string) =
         chunkQueue.Add(src)
-
-    let key_down (ev : KeyEventArgs) =
-        let key = ev.KeyData
-        match key with
-        | Keys.Enter ->
-            let src = Doc.getAllString commandDoc
-            commandDoc <- Doc.create commandDoc.LayoutInfo
-            if history.Contains(src) then
-                history.Remove(src) |> ignore
-            history.Add(src)
-            historyPos <- history.Count
-            logInput (src + "\r\n")
-            run src
-            ev.Handled <- true
-        | Keys.Space
-        | CombinedKeys.Shift_Space ->
-            commandInput " "
-            upd()
-            ev.Handled <- true
-        | Keys.Tab ->
-            ()
-            ev.Handled <- true
-        | Keys.Back
-        | Keys.Delete ->
-            match Doc.backDelete (key = Keys.Delete) commandDoc with
-            | Some newDoc -> commandDoc <- newDoc
-            | None -> beep()
-            upd()
-            ev.Handled <- true
-        | Keys.Left
-        | Keys.Right ->
-            match Doc.leftRight (key = Keys.Right) commandDoc with
-            | Some newDoc -> commandDoc <- newDoc
-            | None -> beep()
-            upd()
-            ev.Handled <- true
-        | Keys.Up ->
-            if history.Count <> 0 && 0 <= historyPos - 1 then
-                historyPos <- historyPos - 1
-                commandDoc <- Doc.replace (Doc.create commandDoc.LayoutInfo) history.[historyPos]
-            else beep()
-            upd()
-            ev.Handled <- true
-        | Keys.Down ->
-            if history.Count <> 0 && historyPos + 1 < history.Count then
-                historyPos <- historyPos + 1
-                commandDoc <- Doc.replace (Doc.create commandDoc.LayoutInfo) history.[historyPos]
-            else beep()
-            upd()
-            ev.Handled <- true
-        | _ -> ()
     
     // let getVp (p : Point) = Point(p.X - leftMargin, topRowIndex * logDoc.LayoutInfo.LineHeight + p.Y)
     let point_sub (a : Point) (b : Point) = Point(a.X - b.X, a.Y - b.Y)
@@ -358,7 +311,6 @@ and Repl() as this =
         { new IMalCoroutine with
             member x.Run(slice) =
                 if e.IsDisposed then state <- 3
-                //if cancellable && mal.OperationCancelled then state <- 2
                 let timestampAtStart = Environment.TickCount
                 while state = 0 && Environment.TickCount - timestampAtStart < slice do
                     if i < doc.RowTree.Count then
@@ -557,6 +509,60 @@ and Repl() as this =
         logInput "Interpreter has been shut down.\r\n"
         upd()
 
+    let key_down (ev : KeyEventArgs) =
+        let key = ev.KeyData
+        match key with
+        | Keys.Enter ->
+            let src = Doc.getAllString commandDoc
+            commandDoc <- Doc.create commandDoc.LayoutInfo
+            if history.Contains(src) then
+                history.Remove(src) |> ignore
+            history.Add(src)
+            historyPos <- history.Count
+            logInput (src + "\r\n")
+            run src
+            ev.Handled <- true
+        | Keys.Space
+        | CombinedKeys.Shift_Space ->
+            commandInput " "
+            upd()
+            ev.Handled <- true
+        | Keys.Tab ->
+            ()
+            ev.Handled <- true
+        | Keys.Back
+        | Keys.Delete ->
+            match Doc.backDelete (key = Keys.Delete) commandDoc with
+            | Some newDoc -> commandDoc <- newDoc
+            | None -> beep()
+            upd()
+            ev.Handled <- true
+        | Keys.Left
+        | Keys.Right ->
+            match Doc.leftRight (key = Keys.Right) commandDoc with
+            | Some newDoc -> commandDoc <- newDoc
+            | None -> beep()
+            upd()
+            ev.Handled <- true
+        | Keys.Up ->
+            if history.Count <> 0 && 0 <= historyPos - 1 then
+                historyPos <- historyPos - 1
+                commandDoc <- Doc.replace (Doc.create commandDoc.LayoutInfo) history.[historyPos]
+            else beep()
+            upd()
+            ev.Handled <- true
+        | Keys.Down ->
+            if history.Count <> 0 && historyPos + 1 < history.Count then
+                historyPos <- historyPos + 1
+                commandDoc <- Doc.replace (Doc.create commandDoc.LayoutInfo) history.[historyPos]
+            else beep()
+            upd()
+            ev.Handled <- true
+        | Keys.F12 ->
+            if mal.IsSome then
+                shutdownUpd()
+            bootUpd()
+        | _ -> ()
     do
         this.Icon <- new Icon(System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Malmacs.PlayIcon.ico"))
         this.Text <- "Repl"
