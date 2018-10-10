@@ -538,6 +538,7 @@ let print_typechk_error lang cols desc =
         | Already_abstract name -> sprintf "Type %s is already abstract." name
         | Basic_types_cannot_be_hidden -> "Basic types cannot be hidden."
         | Lexer_created (name, count) -> sprintf "Lexer %s created. %d states." name count
+        | Invalid_lexer_definition msg -> sprintf "Invalid lexer definition. %s." msg
 
     | Ja ->
         match desc with
@@ -585,6 +586,7 @@ let print_typechk_error lang cols desc =
         | Already_abstract name -> sprintf "型 %s は既に抽象型です。" name
         | Basic_types_cannot_be_hidden -> "基本型は隠蔽できません。"
         | Lexer_created (name, count) -> sprintf "レキサ %s が作成されました。状態数は %d です。" name count
+        | Invalid_lexer_definition msg -> sprintf "レキサの定義が非妥当です。%s." msg
     
 let print_message lang cols (msg : Message) =
     match msg with

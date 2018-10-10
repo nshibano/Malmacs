@@ -55,6 +55,7 @@ type type_error_desc =
     | This_expression_is_not_a_record
     | Already_abstract of string
     | Basic_types_cannot_be_hidden
+    | Invalid_lexer_definition of string
     // Warnings
     | Partially_applied
     | Useless_with_clause
@@ -1066,7 +1067,9 @@ let type_command_list warning_sink tyenv cmds =
                 | _ -> dontcare()
             tyenv <- tyenv'
         | SClex lex_defs ->
-            let ruless = MalLex.Compile lex_defs
+            let ruless =
+                try MalLex.Compile lex_defs
+                with Failure msg -> raise (Type_error ((Invalid_lexer_definition msg), cmd.sc_loc))
             let accu = List<string * string list * HashSet<int> * DfaNode * expression array * location * Types.value_info>()
             tyenvs.Add(tyenv)
             for rules in ruless do
