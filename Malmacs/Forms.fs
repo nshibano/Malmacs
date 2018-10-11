@@ -825,6 +825,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             match Doc.leftRight (key = Keys.Right) undoTree.Get with
             | Some newDoc -> undoTree.Amend newDoc
             | None -> beep()
+            resetCaretXPos()
             upd true
             ev.Handled <- true
         | CombinedKeys.Shift_Left
@@ -832,29 +833,36 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             match Doc.shiftLeftRight (key = CombinedKeys.Shift_Right) undoTree.Get with
             | Some newDoc -> undoTree.Amend(newDoc)
             | None -> beep()
+            resetCaretXPos()
             upd true
             ev.Handled <- true
         | Keys.Up
-        | Keys.Down ->
-            let vp = Doc.getCaretPoint undoTree.Get
+        | Keys.Down
+        | CombinedKeys.Shift_Up
+        | CombinedKeys.Shift_Down ->
+            let down = key.HasFlag(Keys.Down)
+            let shift = key.HasFlag(Keys.Shift)
+            let doc = undoTree.Get
+            let vp = Doc.getCaretPoint doc
             let y =
-                match key with
-                | Keys.Up ->
-                    if vp.Y = 0 then None
-                    else Some (vp.Y - 1)
-                | Keys.Down ->
-                    let y = vp.Y + undoTree.Get.LayoutInfo.LineHeight
-                    if y >= undoTree.Get.LayoutInfo.LineHeight * undoTree.Get.RowCount then
+                if down then
+                    let y = vp.Y + doc.LayoutInfo.LineHeight
+                    if y >= doc.LayoutInfo.LineHeight * doc.RowCount then
                         None
                     else
                         Some y
-                | _ -> dontcare()
+                else
+                    if vp.Y = 0 then None
+                    else Some (vp.Y - 1)
             match y with
             | None -> beep()
             | Some y ->
                 let vp = Point(caretXPos, y)
-                let pos = Doc.getCharPosFromPoint undoTree.Get vp
-                setPos pos
+                let pos = Doc.getCharPosFromPoint doc vp
+                if shift then
+                    undoTree.Amend({ doc with Selection = { doc.Selection with CaretPos = pos }})
+                else
+                    undoTree.Amend({ doc with Selection = { AnchorPos = pos; CaretPos = pos }})
             upd true
             ev.Handled <- true
         | CombinedKeys.Control_X ->
