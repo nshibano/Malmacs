@@ -643,8 +643,15 @@ module Doc =
         Win32.SetBkMode(hdc, Win32.TRANSPARENT) |> ignore
         let hfont1 = font1.ToHfont()
         let hfont2 = font2.ToHfont()
-        let darkgreen_pen = Win32.CreatePen(0, 1, Win32.colorref_of_color(Color.DarkGreen))
         let old_hfont = Win32.SelectObject(hdc, hfont1)
+        let mutable font2Selected = false
+        let selectFont (selectFont2 : bool) =
+            if selectFont2 <> font2Selected then
+                if selectFont2 then Win32.SelectObject(hdc, hfont2) |> ignore
+                else Win32.SelectObject(hdc, hfont1) |> ignore
+                font2Selected <- selectFont2
+
+        let darkgreen_pen = Win32.CreatePen(0, 1, Win32.colorref_of_color(Color.DarkGreen))
         let old_pen = Win32.SelectObject(hdc, darkgreen_pen)
         let selected_brush = Win32.CreateSolidBrush(Win32.colorref_of_color(Color.SkyBlue))
 
@@ -701,13 +708,9 @@ module Doc =
                     let len = row.CharOffsets.[i+1] - ofs
                     if not (0 <= ofs && ofs < row.String.Length && ofs + len <= row.String.Length) then dontcare()
                     let symbol = row.String.Substring(ofs,len)
-                    let yOfs =
-                        if symbolIsAscii symbol then
-                            Win32.SelectObject(hdc, hfont1) |> ignore
-                            li.YOffset1
-                        else
-                            Win32.SelectObject(hdc, hfont2) |> ignore
-                            li.YOffset2
+                    let isAscii = symbolIsAscii symbol
+                    selectFont (not isAscii)
+                    let yOfs = if isAscii then li.YOffset1 else li.YOffset2
                     Win32.TextOut(hdc, x0 + row.XOffsets.[i], li.Padding + y + yOfs, row.String.Substring(ofs,len), len) |> ignore
 
             if linenoWidth > 0 then
@@ -719,6 +722,7 @@ module Doc =
                     let s = sprintf "%4d" lineno
                     let s = if s.Length > 4 then s.Substring(s.Length - 4, 4) else s
                     Win32.SetTextColor(hdc, Win32.colorref_of_color Color.DarkGreen) |> ignore
+                    selectFont false
                     Win32.TextOut(hdc, area.X, li.Padding + y + li.YOffset1, s, s.Length) |> ignore
                 if row.IsEndOfLine then
                     lineno <- lineno + 1
