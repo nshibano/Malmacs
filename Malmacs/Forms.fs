@@ -696,8 +696,10 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         let clientRectangle = this.ClientRectangle
         
         let doc = undoTree.Get
-        let lineHeight = doc.LayoutInfo.LineHeight
-        linenoWidth <- 4 * (Doc.measure doc.LayoutInfo "0")
+        let layoutInfo = doc.LayoutInfo
+        let lineHeight = layoutInfo.LineHeight
+
+        linenoWidth <- 4 * (Doc.measure layoutInfo "0")
         
         textArea.Bounds <- Rectangle(0, menu.Height, clientRectangle.Width - vScroll.Width, clientRectangle.Height - menu.Height - hScroll.Height - statusHeight)
         statusArea.Bounds <- Rectangle(0, clientRectangle.Bottom - statusHeight, clientRectangle.Width, statusHeight)
@@ -730,8 +732,8 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         // caret
         if state <> EditorState.Compositioning && textArea.Focused then
             let w = 2
-            Win32.CreateCaret(textArea.Handle, IntPtr.Zero, w, doc.LayoutInfo.FontSize) |> ignore
-            Win32.SetCaretPos(p1.X - w/2 - xOffset, doc.LayoutInfo.Padding + p1.Y) |> ignore
+            Win32.CreateCaret(textArea.Handle, IntPtr.Zero, w, layoutInfo.FontSize) |> ignore
+            Win32.SetCaretPos(p1.X - w/2 - xOffset, p1.Y + layoutInfo.Padding) |> ignore
             Win32.ShowCaret(textArea.Handle) |> ignore
             hasCaret <- true
         elif hasCaret then
@@ -741,7 +743,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         match state with
         | EditorState.Compositioning ->
             let ime = Win32.ImmGetContext(textArea.Handle)
-            let mutable compForm = Win32.COMPOSITIONFORM(dwStyle = Win32.CFS_POINT, ptCurrentPos = Win32.POINT(x = p1.X, y = p1.Y + undoTree.Get.LayoutInfo.Padding + undoTree.Get.LayoutInfo.YOffset), rcArea = Win32.RECT())
+            let mutable compForm = Win32.COMPOSITIONFORM(dwStyle = Win32.CFS_POINT, ptCurrentPos = Win32.POINT(x = p1.X - xOffset, y = p1.Y + layoutInfo.Padding + layoutInfo.YOffset), rcArea = Win32.RECT())
             Win32.ImmSetCompositionWindow(ime, &compForm) |> ignore
             use font = new Font("MS Gothic", float32 undoTree.Get.LayoutInfo.FontSize, GraphicsUnit.Pixel)
             let logfont = Win32.LOGFONT()
