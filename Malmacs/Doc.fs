@@ -52,7 +52,7 @@ type DocLayoutInfo =
     { FontSpec : FontSpec
       FontSize: int
       PageWidth : int
-      TabWidth : int
+      TabWidthInSpaces : int
       Padding : int
       YOffset1 : int
       YOffset2 : int }
@@ -65,7 +65,7 @@ type DocLayoutInfo =
             FontSpec = Ja_Consolas_MSGothic
             FontSize = fontSize
             PageWidth = pageWidth
-            TabWidth = 4 * fontSize
+            TabWidthInSpaces = 8
             Padding = padding
             YOffset1 = int (Math.Round(- float fontSize / 10.0))
             YOffset2 = 0
@@ -406,7 +406,9 @@ module Doc =
                 buf.[i - headCount]
             else
                 rowTree_charAt_loop tail tail.Root (i - headCount - bufferCount)
-
+        
+        let tabWidthInPixels = doc.LayoutInfo.TabWidthInSpaces * measure doc.LayoutInfo " "
+        
         while buf.Count > 0 do
 
             let scanStart = head.RootMeasure.CharCount
@@ -438,7 +440,7 @@ module Doc =
                 
                 match symbol with
                 | "\t" ->
-                    let xOffsetAfterAdd = ((xOffset / doc.LayoutInfo.TabWidth + 1) * doc.LayoutInfo.TabWidth)
+                    let xOffsetAfterAdd = ((xOffset / tabWidthInPixels + 1) * tabWidthInPixels)
                     if xOffsetAfterAdd <= doc.LayoutInfo.PageWidth then
                         add symbol xOffsetAfterAdd
                     else cont <- false                     
