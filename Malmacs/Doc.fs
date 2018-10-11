@@ -45,25 +45,30 @@ type RowTreeInfo =
       EndOfLineCount : int
       MaximumWidth : int }
 
+type FontSpec =
+    | Ja_Consolas_MSGothic
+
 type DocLayoutInfo =
-    { FontName : string
+    { FontSpec : FontSpec
       FontSize: int
       PageWidth : int
       TabWidth : int
       Padding : int
-      YOffset : int }
+      YOffset1 : int
+      YOffset2 : int }
     
     member x.LineHeight = x.FontSize + 2 * x.Padding
 
     static member Default pageWidth fontSize =
         let padding = fontSize / 8
         {
-            FontName = "MS Gothic"
+            FontSpec = Ja_Consolas_MSGothic
             FontSize = fontSize
             PageWidth = pageWidth
             TabWidth = 4 * fontSize
             Padding = padding
-            YOffset = 1
+            YOffset1 = - fontSize / 20
+            YOffset2 = 0
         }          
 
 type RowTree = MeasuredTreeList<Row, RowTreeInfo>
@@ -205,12 +210,34 @@ module Doc =
 
         if table.Length = 0 then table.Length
         else loop 0 table.Length
+    
+    let symbolIsNewline (symbol : string) =
+        let c0 = symbol.[0]
+        c0 = '\r' || c0 = '\n'
+
+    let symbolIsSpaceOrTab (symbol : string) =
+        symbol = " " || symbol = "\t"
+
+    let symbolIsAscii (symbol : string) =
+        symbol.Length = 1 &&
+        let c = symbol.[0]
+        '\x00' <= c && c <= '\xFF'
+    
+    //let symbolIsHalfwidth (symbol : string) =
+    //    symbol.Length = 1 &&
+    //    let c = symbol.[0]
+    //    ('\u0020' <= c && c <= '\u007E') || // ascii
+    //    ('\uFF66' <= c && c <= '\uFF9F') // 半角カナ
 
     let dummy_bmp = new System.Drawing.Bitmap(1, 1)
     let dummy_g = Graphics.FromImage(dummy_bmp)
     let measure_cache = Dictionary<string, int>()
     let mutable latest_info = DocLayoutInfo.Default 800 20
-    let createFont (info : DocLayoutInfo) = new Font(info.FontName, float32 info.FontSize, GraphicsUnit.Pixel)
+    let createFont (info : DocLayoutInfo) =
+        match info.FontSpec with
+        | Ja_Consolas_MSGothic ->
+            (new Font("Consolas", float32 info.FontSize, GraphicsUnit.Pixel),
+             new Font("MS Gothic", float32 info.FontSize, GraphicsUnit.Pixel))
     let mutable latest_font = createFont latest_info
     let measure (info : DocLayoutInfo) (symbol : string) =
         if not (LanguagePrimitives.PhysicalEquality info latest_info) then
@@ -224,11 +251,14 @@ module Doc =
                 match symbol with
                 | "\r\n"
                 | "\n"
+                | "\r"
                 | " " -> "a"
                 | "　" -> "あ"
                 | _ -> symbol
-            let f sym = int (round (dummy_g.MeasureString(sym, latest_font, PointF(0.0f, 0.0f), StringFormat.GenericTypographic).Width))
-            let w = max (f symbol) (f "a")
+            let font1, font2 = latest_font
+            let font = if symbolIsAscii symbol then font1 else font2
+            let w = int (round (dummy_g.MeasureString(symbol, font, PointF(0.0f, 0.0f), StringFormat.GenericTypographic).Width))
+            let w = max w (info.FontSize / 10)
             measure_cache.[symbol] <- w
             w
     
@@ -323,19 +353,6 @@ module Doc =
             let charRange = getCharRangeFromRowIndex doc rowIndex
             row.Colors.[charIndex - charRange.Begin]
         else raise (IndexOutOfRangeException())
-
-    let symbolIsNewline (symbol : string) =
-        let c0 = symbol.[0]
-        c0 = '\r' || c0 = '\n'
-
-    let symbolIsSpaceOrTab (symbol : string) =
-        symbol = " " || symbol = "\t"
-
-    //let symbolIsHalfwidth (symbol : string) =
-    //    symbol.Length = 1 &&
-    //    let c = symbol.[0]
-    //    ('\u0020' <= c && c <= '\u007E') || // ascii
-    //    ('\uFF66' <= c && c <= '\uFF9F') // 半角カナ
     
     let replace (doc : Doc) (replacement : string) =
 
@@ -619,14 +636,15 @@ module Doc =
         let bottomRowIndex = min (topRowIndex + area.Height / li.LineHeight) (doc.RowCount - 1)
         let mutable y = area.Y
         let x0 = area.X + linenoWidth + leftMargin - xOffset
-        use font = createFont li
+        let font1, font2 = createFont li
         let mutable lineno = doc.RowTree.MeasureRange(0, topRowIndex).EndOfLineCount + 1
         let mutable printLineno = topRowIndex = 0 || (getRow doc (topRowIndex - 1)).IsEndOfLine
         let hdc = g.GetHdc()
         Win32.SetBkMode(hdc, Win32.TRANSPARENT) |> ignore
-        let hfont = font.ToHfont()
+        let hfont1 = font1.ToHfont()
+        let hfont2 = font2.ToHfont()
         let darkgreen_pen = Win32.CreatePen(0, 1, Win32.colorref_of_color(Color.DarkGreen))
-        let old_hfont = Win32.SelectObject(hdc, hfont)
+        let old_hfont = Win32.SelectObject(hdc, hfont1)
         let old_pen = Win32.SelectObject(hdc, darkgreen_pen)
         let selected_brush = Win32.CreateSolidBrush(Win32.colorref_of_color(Color.SkyBlue))
 
@@ -682,7 +700,15 @@ module Doc =
                     let ofs = row.CharOffsets.[i]
                     let len = row.CharOffsets.[i+1] - ofs
                     if not (0 <= ofs && ofs < row.String.Length && ofs + len <= row.String.Length) then dontcare()
-                    Win32.TextOut(hdc, x0 + row.XOffsets.[i], li.Padding + y + li.YOffset, row.String.Substring(ofs,len), len) |> ignore
+                    let symbol = row.String.Substring(ofs,len)
+                    let yOfs =
+                        if symbolIsAscii symbol then
+                            Win32.SelectObject(hdc, hfont1) |> ignore
+                            li.YOffset1
+                        else
+                            Win32.SelectObject(hdc, hfont2) |> ignore
+                            li.YOffset2
+                    Win32.TextOut(hdc, x0 + row.XOffsets.[i], li.Padding + y + yOfs, row.String.Substring(ofs,len), len) |> ignore
 
             if linenoWidth > 0 then
                 let mutable rect = Win32.RECT(left = area.X, top = y, right = area.X + linenoWidth, bottom = y + li.LineHeight)
@@ -693,7 +719,7 @@ module Doc =
                     let s = sprintf "%4d" lineno
                     let s = if s.Length > 4 then s.Substring(s.Length - 4, 4) else s
                     Win32.SetTextColor(hdc, Win32.colorref_of_color Color.DarkGreen) |> ignore
-                    Win32.TextOut(hdc, area.X, li.Padding + y + li.YOffset, s, s.Length) |> ignore
+                    Win32.TextOut(hdc, area.X, li.Padding + y + li.YOffset1, s, s.Length) |> ignore
                 if row.IsEndOfLine then
                     lineno <- lineno + 1
                     printLineno <- true
@@ -712,6 +738,10 @@ module Doc =
             y <- y + li.LineHeight
 
         Win32.DeleteObject(Win32.SelectObject(hdc, old_pen)) |> ignore
-        Win32.DeleteObject(Win32.SelectObject(hdc, old_hfont)) |> ignore
+        Win32.SelectObject(hdc, old_hfont) |> ignore
+        Win32.DeleteObject(hfont1) |> ignore
+        Win32.DeleteObject(hfont2) |> ignore
         Win32.DeleteObject(selected_brush) |> ignore
+        font1.Dispose()
+        font2.Dispose()
         g.ReleaseHdc(hdc)

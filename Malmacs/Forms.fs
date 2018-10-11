@@ -57,12 +57,13 @@ and Repl() as this =
 
     let mutable logDoc =
         Doc.create
-            { FontName = "MS Gothic"
+            { FontSpec = Ja_Consolas_MSGothic
               FontSize = 20
               PageWidth = max (20 / 2 * cols) textArea.ClientRectangle.Width
               TabWidth = 4 * 20
               Padding = padding
-              YOffset = 1 }
+              YOffset1 = -2
+              YOffset2 = 0 }
 
     let mutable commandDoc = Doc.create logDoc.LayoutInfo
 
@@ -743,9 +744,9 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         match state with
         | EditorState.Compositioning ->
             let ime = Win32.ImmGetContext(textArea.Handle)
-            let mutable compForm = Win32.COMPOSITIONFORM(dwStyle = Win32.CFS_POINT, ptCurrentPos = Win32.POINT(x = p1.X - xOffset, y = p1.Y + layoutInfo.Padding + layoutInfo.YOffset), rcArea = Win32.RECT())
+            let mutable compForm = Win32.COMPOSITIONFORM(dwStyle = Win32.CFS_POINT, ptCurrentPos = Win32.POINT(x = p1.X - xOffset, y = p1.Y + layoutInfo.Padding + layoutInfo.YOffset2), rcArea = Win32.RECT())
             Win32.ImmSetCompositionWindow(ime, &compForm) |> ignore
-            use font = new Font("MS Gothic", float32 undoTree.Get.LayoutInfo.FontSize, GraphicsUnit.Pixel)
+            use font = new Font("MS Gothic", float32 layoutInfo.FontSize, GraphicsUnit.Pixel)
             let logfont = Win32.LOGFONT()
             font.ToLogFont(logfont)
             Win32.ImmSetCompositionFont(ime, logfont) |> ignore
@@ -922,7 +923,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             // EOF mark
             if drawEofSymbol then
                 let p = Doc.getPointFromCharPos doc doc.CharCount
-                let p = Point(p.X + linenoWidth + leftMargin, - doc.LayoutInfo.LineHeight * topRowIndex + p.Y + doc.LayoutInfo.Padding + doc.LayoutInfo.YOffset)
+                let p = Point(p.X + linenoWidth + leftMargin, - doc.LayoutInfo.LineHeight * topRowIndex + p.Y + doc.LayoutInfo.Padding + doc.LayoutInfo.YOffset1)
                 use eofFont = new Font("MS Gothic", float32 doc.LayoutInfo.FontSize, GraphicsUnit.Pixel)
                 g.DrawString("[EOF]", eofFont, Brushes.LightGray, float32 p.X, float32 p.Y, StringFormat.GenericTypographic)
             
