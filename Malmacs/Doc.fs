@@ -67,7 +67,7 @@ type DocLayoutInfo =
             PageWidth = pageWidth
             TabWidth = 4 * fontSize
             Padding = padding
-            YOffset1 = - fontSize / 20
+            YOffset1 = int (Math.Round(- float fontSize / 10.0))
             YOffset2 = 0
         }          
 
