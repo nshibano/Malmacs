@@ -561,8 +561,13 @@ module Doc =
         else doc
 
     let clearColor (doc : Doc) : Doc =
-        let rows = Array.map (fun row -> { row with Colors = Array.create row.String.Length ColorInfo_Default }) (doc.RowTree.ToArray())
-        { doc with RowTree = MeasuredTreeList<Row, RowTreeInfo>(rowTreeFunc, RowTreeInfo_Zero, rows) }
+        let mutable accu = doc.RowTree
+        let isClear (ary : ColorInfo array) = Array.forall (LanguagePrimitives.PhysicalEquality ColorInfo_Default) ary
+        for i = 0 to doc.RowTree.Count - 1 do
+            let row = doc.RowTree.[i]
+            if not (isClear row.Colors) then
+                accu <- accu.ReplaceAt(i, { row with Colors = Array.create row.String.Length ColorInfo_Default })
+        { doc with RowTree = accu }
 
     let prevNext (nextNotPrev : bool) (doc : Doc) charPos =
         let newPos = validateCharPos doc nextNotPrev (if nextNotPrev then charPos + 1 else charPos - 1)
