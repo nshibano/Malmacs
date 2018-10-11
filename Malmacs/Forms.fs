@@ -328,7 +328,7 @@ and Repl() as this =
                 | _ -> dontcare()
             member x.Dispose() = () }
 
-    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (cancellable : bool) (mm : memory_manager) (argv : value array) =
+    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : memory_manager) (argv : value array) =
         let e = to_obj argv.[0] :?> Editor
         let ary = to_malarray argv.[1]
         let mutable state = 0
@@ -336,16 +336,18 @@ and Repl() as this =
         let mutable latestValue = mal.ValueOfObj<ColorInfo>(Doc.ColorInfo_Default)
         let mutable latestObj = Doc.ColorInfo_Default
         let colorInfoAt i =
-            let v = ary.storage.[i]
-            if LanguagePrimitives.PhysicalEquality v latestValue then
-                latestObj
-            else
-                let x = mal.ObjOfValue<ColorInfo>(v)
-                latestValue <- v
-                latestObj <- x
-                x
+            if i < ary.count then
+                let v = ary.storage.[i]
+                if LanguagePrimitives.PhysicalEquality v latestValue then
+                    latestObj
+                else
+                    let x = mal.ObjOfValue<ColorInfo>(v)
+                    latestValue <- v
+                    latestObj <- x
+                    x
+            else Doc.ColorInfo_Default
         let doc = e.Doc
-        let mutable rowAccu = MeasuredTreeList<Row, RowTreeInfo>(Doc.rowTreeFunc, Doc.RowTreeInfo_Zero)
+        let mutable accu = doc.RowTree
 
         { new IMalCoroutine with
             member x.Run(slice) =
@@ -355,17 +357,12 @@ and Repl() as this =
                     if i < doc.RowTree.Count then
                         let row = doc.RowTree.[i]
                         let rowRange = Doc.getCharRangeFromRowIndex doc i
-                        let colors =
-                            Array.init row.SymbolCount (fun j ->
-                                let ofs = rowRange.Begin + row.CharOffsets.[j]
-                                if ofs < ary.count then
-                                    colorInfoAt ofs
-                                else
-                                    Doc.ColorInfo_Default)
-                        rowAccu <- rowAccu.Add({ row with Colors = colors })
+                        let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.Begin + j))
+                        if colors <> row.Colors then
+                            accu <- accu.ReplaceAt(i, { row with Colors = colors })
                         i <- i + 1
                     else
-                        let newDoc = { doc with RowTree = rowAccu }
+                        let newDoc = { doc with RowTree = accu }
                         if LanguagePrimitives.PhysicalEquality e.Doc doc then
                             e.Amend(newDoc)
                             e.TextArea.Invalidate()
@@ -445,7 +442,7 @@ and Repl() as this =
             malEnsureEditorIsOk mm e
             e.EditorText <- s))
         interp.Fun("editorInitiateHighlighting", (fun mm (e : Editor) -> this.InitiateHighlighting(e)))
-        interp.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter interp false), interp.Typeof<Editor -> ColorInfo array -> unit>())
+        interp.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter interp), interp.Typeof<Editor -> ColorInfo array -> unit>())
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =

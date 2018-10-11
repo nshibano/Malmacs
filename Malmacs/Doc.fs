@@ -28,7 +28,7 @@ type ColorInfo =
 
 type Row =
     { String : string
-      Colors : ColorInfo array
+      Colors : ColorInfo array // row.String.Length = row.Colors.Length
       CharOffsets : int array
       XOffsets : int array
       IsEndOfLine : bool }
@@ -320,8 +320,8 @@ module Doc =
         if 0 <= charIndex && charIndex < doc.CharCount then
             let rowIndex = getRowIndexFromCharPos doc charIndex
             let row = getRow doc rowIndex
-            let leftCharCount = doc.RowTree.MeasureRange(0, rowIndex).CharCount
-            row.Colors.[charIndex - leftCharCount]
+            let charRange = getCharRangeFromRowIndex doc rowIndex
+            row.Colors.[charIndex - charRange.Begin]
         else raise (IndexOutOfRangeException())
 
     let symbolIsNewline (symbol : string) =
@@ -559,30 +559,9 @@ module Doc =
         if layoutInfo <> doc.LayoutInfo then
             createFromString layoutInfo (getAllString doc)
         else doc
-    
-    let setColorInfo (doc : Doc) (colors : ColorInfo array) =
-        let rows =
-            Array.mapi (fun i (row : Row) ->
-                let rowRange = getCharRangeFromRowIndex doc i
-                let colors =
-                    Array.init row.SymbolCount (fun j ->
-                        let ofs = rowRange.Begin + row.CharOffsets.[j]
-                        if ofs < colors.Length then
-                            colors.[ofs]
-                        else
-                            ColorInfo_Default)
-                { row with Colors = colors }) (doc.RowTree.ToArray())
-        
-        let eofColor =
-            if colors.Length > doc.CharCount then
-                colors.[doc.CharCount]
-            else ColorInfo_Default
-
-        let newDoc = { doc with RowTree = MeasuredTreeList<Row, RowTreeInfo>(rowTreeFunc, RowTreeInfo_Zero, rows) }
-        newDoc
 
     let clearColor (doc : Doc) : Doc =
-        let rows = Array.map (fun row -> { row with Colors = Array.create row.SymbolCount ColorInfo_Default }) (doc.RowTree.ToArray())
+        let rows = Array.map (fun row -> { row with Colors = Array.create row.String.Length ColorInfo_Default }) (doc.RowTree.ToArray())
         { doc with RowTree = MeasuredTreeList<Row, RowTreeInfo>(rowTreeFunc, RowTreeInfo_Zero, rows) }
 
     let prevNext (nextNotPrev : bool) (doc : Doc) charPos =
@@ -661,13 +640,12 @@ module Doc =
             let rowRange = getCharRangeFromRowIndex doc k
             Win32.SetTextColor(hdc, Win32.colorref_of_color Color.Black) |> ignore
             for i = 0 to row.SymbolCount - 1 do
-                let charPos = rowRange.Begin + row.CharOffsets.[i]
-                let colorInfo = row.Colors.[i]
+                let colorInfo = row.Colors.[row.CharOffsets.[i]]
                 let x = x0 + row.XOffsets.[i]
                 let w = row.XOffsets.[i + 1] - row.XOffsets.[i]
                 let range = doc.Selection.ToRange()
                 let rectXOfs = -1
-                if range.Contains charPos then
+                if range.Contains (rowRange.Begin + row.CharOffsets.[i]) then
                     let mutable rect = Win32.RECT(left = x + rectXOfs, top = y, right = x + w, bottom = y + li.LineHeight)
                     Win32.FillRect(hdc, &rect, selected_brush) |> ignore
                 elif Option.isSome colorInfo.ciBackColor then
