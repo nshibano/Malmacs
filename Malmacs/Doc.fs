@@ -16,7 +16,9 @@ type ColorInfo =
 
 // Terminology
 //
-// Symbol : A 'character' item edited in text editor. It consists of 1 or 2 System.Char. 2-character symbols are either of "\r\n" or surrogate pair.
+// Char : System.Char type value.
+//
+// Symbol : An item edited in text editor. It consists of 1 or 2 char. 2-char symbols are either of "\r\n" or surrogate pair.
 //          Press Left/right key will skip one symbol, and press backspace/delete key will remove one symbol.
 //
 // Row : Sequence of symbols displayed horizontally on the editor, or one may call it "visual line". A line contain 1 or more rows.
@@ -25,6 +27,13 @@ type ColorInfo =
 //        The last newline symbol of the line is part of the content of the line.
 //        If a text ends with newline symbol, the final line of the text is empty line (a line that contains zero symbols). 
 //        Empty text contains one empty line.
+//
+// Index : An integer number that specifies item in a sequence. When sequence have n items, valid range of index is [0, n).
+//
+// Pos : Abbreviation of 'position'. An integer number that specifies position in sequence of items. When sequence have n items, valid range of pos is [0, n].
+//       Pos 0 is the position before sequence start, or position before the first item.
+//       Pos n is the position after end of the sequence, of position after the last item.
+//       Pos i is the position before the i-th item, or the position after (i-1)-th item.
 
 type Row =
     { String : string
