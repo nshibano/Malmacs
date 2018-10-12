@@ -663,24 +663,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     let setSelection (sel : Selection) =
         undoTree.Amend({ undoTree.Get with Selection = sel })
         resetCaretXPos()
-    
-    let clearColor() =
-        undoTree.Amend(Doc.clearColor undoTree.Get)
-        
-    let undo() =
-        if undoTree.CanUndo then
-            latestCommitDate <- DateTime.MinValue
-            undoTree.Undo()
-            clearColor()
-            resetCaretXPos()
-
-    let redo() =
-        if undoTree.CanRedo then
-            latestCommitDate <- DateTime.MinValue
-            undoTree.Redo()
-            clearColor()
-            resetCaretXPos()
-
+            
     let maximumAmendPeriod = TimeSpan.FromSeconds(1.0)
 
     let commit (newDoc : Doc) (atomic : bool) =
@@ -792,6 +775,28 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     let selectAll_upd() =
         selectAll()
         upd false
+    
+    let undoUpd() =
+        if undoTree.CanUndo then
+            latestCommitDate <- DateTime.MinValue
+            let li = undoTree.Get.LayoutInfo
+            undoTree.Undo()
+            undoTree.Amend(Doc.changeLayout li undoTree.Get)
+            undoTree.Amend(Doc.clearColor undoTree.Get)
+            resetCaretXPos()
+            upd true
+        else beep()
+    
+    let redoUpd() =
+        if undoTree.CanRedo then
+            latestCommitDate <- DateTime.MinValue
+            let li = undoTree.Get.LayoutInfo
+            undoTree.Redo()
+            undoTree.Amend(Doc.changeLayout li undoTree.Get)
+            undoTree.Amend(Doc.clearColor undoTree.Get)
+            resetCaretXPos()
+            upd true
+        else beep()
 
     let getVp (p : Point) = Point(p.X - linenoWidth - leftMargin + xOffset, undoTree.Get.LayoutInfo.LineHeight * topRowIndex + p.Y)
     let getLineEnding() = match textFileHandle with None -> CRLF | Some handle -> handle.LineEnding
@@ -879,11 +884,10 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             selectAll_upd()
             ev.Handled <- true
         | CombinedKeys.Control_Z ->
-            undo()
-            upd true
+            undoUpd()
         | CombinedKeys.Control_Y
         | CombinedKeys.Control_Shift_Z ->
-            redo()
+            redoUpd()
             upd true
         | Keys.F5 ->
             GC.Collect()
