@@ -294,22 +294,15 @@ module Doc =
           RowTree = MeasuredTreeList<Row, RowTreeInfo>(rowTreeFunc, RowTreeInfo_Zero)
           Selection = { CaretPos = 0; AnchorPos = 0 }
           ContentId = contentIdNew() }
-    
+
     let getRow (doc : Doc) rowIndex =
-        if 0 <= rowIndex && rowIndex < doc.RowTree.Count then
-            doc.RowTree.[rowIndex]
-        elif rowIndex = doc.RowTree.Count && doc.HasTrailingEmptyLine then
-            Row_empty
-        else raise (IndexOutOfRangeException())
-    
-    let getCharRangeFromRowIndex (doc : Doc) rowIndex =
         if 0 <= rowIndex && rowIndex < doc.RowTree.Count then
             let bgn = doc.RowTree.MeasureRange(0, rowIndex).CharCount
             let row = doc.RowTree.[rowIndex]
-            { Begin = bgn; End = bgn + row.String.Length }
+            row, { Begin = bgn; End = bgn + row.String.Length }
         elif rowIndex = doc.RowTree.Count && doc.HasTrailingEmptyLine then
             let bgn = doc.RowTree.RootMeasure.CharCount
-            { Begin = bgn; End = bgn }
+            Row_empty, { Begin = bgn; End = bgn }
         else raise (IndexOutOfRangeException())
 
     let getRowIndexFromCharPos (doc : Doc) charPos =
@@ -338,8 +331,7 @@ module Doc =
         elif doc.CharCount < charPos then doc.CharCount
         else
             let rowIndex = getRowIndexFromCharPos doc charPos
-            let row = getRow doc rowIndex
-            let rowRange = getCharRangeFromRowIndex doc rowIndex
+            let row, rowRange = getRow doc rowIndex
             let binchop = if rightNotLeft then binchopRight else binchopLeft
             let i = binchop row.CharOffsets (charPos - rowRange.Begin)
             rowRange.Begin + row.CharOffsets.[i]
@@ -350,7 +342,7 @@ module Doc =
     let getChar (doc : Doc) charIndex =
         if 0 <= charIndex && charIndex < doc.CharCount then
             let rowIndex = getRowIndexFromCharPos doc charIndex
-            let row = getRow doc rowIndex
+            let row, _ = getRow doc rowIndex
             let leftCharCount = doc.RowTree.MeasureRange(0, rowIndex).CharCount
             row.String.[charIndex - leftCharCount]
         else raise (IndexOutOfRangeException())
@@ -358,9 +350,8 @@ module Doc =
     let getColorInfo (doc : Doc) charIndex =
         if 0 <= charIndex && charIndex < doc.CharCount then
             let rowIndex = getRowIndexFromCharPos doc charIndex
-            let row = getRow doc rowIndex
-            let charRange = getCharRangeFromRowIndex doc rowIndex
-            row.Colors.[charIndex - charRange.Begin]
+            let row, rowRange = getRow doc rowIndex
+            row.Colors.[charIndex - rowRange.Begin]
         else raise (IndexOutOfRangeException())
     
     let replace (doc : Doc) (replacement : string) =
@@ -389,7 +380,7 @@ module Doc =
         
         let buf = Buf()
         for rowIndex = deconstrRowIndexBegin to deconstrRowIndexEnd - 1 do
-            buf.AddRange((getRow doc rowIndex).String)
+            buf.AddRange((fst (getRow doc rowIndex)).String)
         
         buf.ReplaceRange((charRange.Begin - head.RootMeasure.CharCount), (charRange.Length), replacement)
         let charCount = head.RootMeasure.CharCount + buf.Count + tail.RootMeasure.CharCount
@@ -493,8 +484,7 @@ module Doc =
 
     let getSymbolFromCharPos (doc : Doc) (charPos : int) =
         let rowIndex = getRowIndexFromCharPos doc charPos
-        let row = getRow doc rowIndex
-        let rowRange = getCharRangeFromRowIndex doc rowIndex
+        let row, rowRange = getRow doc rowIndex
         let symbolIndexInRow = binchopLeft row.CharOffsets (charPos - rowRange.Begin)
         let ofs = row.CharOffsets.[symbolIndexInRow]
         let len = row.CharOffsets.[symbolIndexInRow + 1] - row.CharOffsets.[symbolIndexInRow]
@@ -512,8 +502,7 @@ module Doc =
     let getPointFromCharPos (doc : Doc) (charPos : int) =
         let rowIndex = getRowIndexFromCharPos doc charPos
         let y = doc.LayoutInfo.LineHeight * rowIndex
-        let row = getRow doc rowIndex
-        let rowRange = getCharRangeFromRowIndex doc rowIndex
+        let row, rowRange = getRow doc rowIndex
         let symbolIndex = binchopLeft row.CharOffsets (charPos - rowRange.Begin)
         let x = row.XOffsets.[symbolIndex]
         Point(x, y)
@@ -522,8 +511,7 @@ module Doc =
 
     let getCharIndexFromPoint (doc : Doc) (p : Point) =
         let rowIndex = { Begin = 0; End = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
-        let row = getRow doc rowIndex
-        let rowRange = getCharRangeFromRowIndex doc rowIndex
+        let row, rowRange = getRow doc rowIndex
         let i = binchopLeft row.XOffsets p.X
         if i = -1 || i = row.XOffsets.Length - 1 then
             None
@@ -534,8 +522,7 @@ module Doc =
     
     let getCharPosFromPoint (doc : Doc) (p : Point) =
         let rowIndex = { Begin = 0; End = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
-        let row = getRow doc rowIndex
-        let rowRange = getCharRangeFromRowIndex doc rowIndex
+        let row, rowRange = getRow doc rowIndex
         let symbolPosInRow =
             let i = binchopLeft row.XOffsets p.X
             if i = -1 then 0 else i
@@ -560,8 +547,7 @@ module Doc =
     let getWordSelection (doc : Doc) (p : Point) =
         if doc.CharCount > 0 then
             let rowIndex = { Begin = 0; End = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
-            let row = getRow doc rowIndex
-            let rowRange = getCharRangeFromRowIndex doc rowIndex
+            let row, rowRange = getRow doc rowIndex
             if rowRange.Length > 0 then
                 let symbolPosInRow =
                     let i = binchopLeft row.XOffsets p.X
@@ -649,7 +635,7 @@ module Doc =
         let x0 = area.X + linenoWidth + leftMargin - xOffset
         let font1, font2 = createFont li
         let mutable lineno = doc.RowTree.MeasureRange(0, topRowIndex).EndOfLineCount + 1
-        let mutable printLineno = topRowIndex = 0 || (getRow doc (topRowIndex - 1)).IsEndOfLine
+        let mutable printLineno = topRowIndex = 0 || (fst (getRow doc (topRowIndex - 1))).IsEndOfLine
         let hdc = g.GetHdc()
         Win32.SetBkMode(hdc, Win32.TRANSPARENT) |> ignore
         let hfont1 = font1.ToHfont()
@@ -677,8 +663,7 @@ module Doc =
                 Win32.LineTo(hdc, tb.X, tb.Y) |> ignore
         
         for k = topRowIndex to bottomRowIndex do
-            let row = getRow doc k
-            let rowRange = getCharRangeFromRowIndex doc k
+            let row, rowRange = getRow doc k
             Win32.SetTextColor(hdc, Win32.colorref_of_color Color.Black) |> ignore
             for i = 0 to row.SymbolCount - 1 do
                 let colorInfo = row.Colors.[row.CharOffsets.[i]]

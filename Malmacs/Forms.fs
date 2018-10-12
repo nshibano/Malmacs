@@ -355,8 +355,7 @@ and Repl() as this =
                 let timestampAtStart = Environment.TickCount
                 while state = 0 && Environment.TickCount - timestampAtStart < slice do
                     if i < doc.RowTree.Count then
-                        let row = doc.RowTree.[i]
-                        let rowRange = Doc.getCharRangeFromRowIndex doc i
+                        let row, rowRange = Doc.getRow doc i
                         let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.Begin + j))
                         if colors <> row.Colors then
                             accu <- accu.ReplaceAt(i, { row with Colors = colors })
