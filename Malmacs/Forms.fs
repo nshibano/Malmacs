@@ -891,6 +891,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             GC.Collect()
             upd false
             ev.Handled <- true
+        //| Keys.F6 -> failwith "boom"
         | Keys.F9 ->
             repl.Show()
             ev.Handled <- true

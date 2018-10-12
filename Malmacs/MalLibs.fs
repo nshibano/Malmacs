@@ -104,3 +104,4 @@ let add (mal : Interpreter) =
     mal.Fun("captureGetLength", (fun mm (c : Capture) -> c.Length))
     mal.Fun("captureGetValue", (fun mm (c : Capture) -> c.Value))
     
+    //mal.Fun("boom", (fun mm () -> failwith "boom" : unit))
