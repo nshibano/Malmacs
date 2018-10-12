@@ -259,7 +259,6 @@ and Repl() as this =
     let run (src : string) =
         chunkQueue.Add(src)
     
-    // let getVp (p : Point) = Point(p.X - leftMargin, topRowIndex * logDoc.LayoutInfo.LineHeight + p.Y)
     let point_sub (a : Point) (b : Point) = Point(a.X - b.X, a.Y - b.Y)
 
     let mouse_down (ev : MouseEventArgs) =
@@ -798,7 +797,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             upd true
         else beep()
 
-    let getVp (p : Point) = Point(p.X - linenoWidth - leftMargin + xOffset, undoTree.Get.LayoutInfo.LineHeight * topRowIndex + p.Y)
+    let getDp (p : Point) = Point(p.X - linenoWidth - leftMargin + xOffset, undoTree.Get.LayoutInfo.LineHeight * topRowIndex + p.Y)
     let getLineEnding() = match textFileHandle with None -> CRLF | Some handle -> handle.LineEnding
     let getEncoding() = match textFileHandle with None -> UTF8 | Some handle -> handle.TextEncoding
 
@@ -849,22 +848,22 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             let down = key.HasFlag(Keys.Down)
             let shift = key.HasFlag(Keys.Shift)
             let doc = undoTree.Get
-            let vp = Doc.getCaretPoint doc
+            let dp = Doc.getCaretPoint doc
             let y =
                 if down then
-                    let y = vp.Y + doc.LayoutInfo.LineHeight
+                    let y = dp.Y + doc.LayoutInfo.LineHeight
                     if y >= doc.LayoutInfo.LineHeight * doc.RowCount then
                         None
                     else
                         Some y
                 else
-                    if vp.Y = 0 then None
-                    else Some (vp.Y - 1)
+                    if dp.Y = 0 then None
+                    else Some (dp.Y - 1)
             match y with
             | None -> beep()
             | Some y ->
-                let vp = Point(caretXPos, y)
-                let pos = Doc.getCharPosFromPoint doc vp
+                let dp = Point(caretXPos, y)
+                let pos = Doc.getCharPosFromPoint doc dp
                 if shift then
                     undoTree.Amend({ doc with Selection = { doc.Selection with CaretPos = pos }})
                 else
@@ -1012,20 +1011,20 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         textArea.Focus() |> ignore
         if state = EditorState.Idle then
             if ev.Button.HasFlag(MouseButtons.Left) then
-                let vp = getVp ev.Location
+                let dp = getDp ev.Location
                 let doc = undoTree.Get
-                let pos = Doc.getCharPosFromPoint doc vp
+                let pos = Doc.getCharPosFromPoint doc dp
                 state <- LeftDown
                 setPos pos
-                caretXPos <- vp.X
+                caretXPos <- dp.X
                 upd false
             else ()
         elif state = Compositioning then
-            let vp = getVp ev.Location
+            let dp = getDp ev.Location
             let doc = undoTree.Get
-            let pos = Doc.getCharPosFromPoint doc vp
+            let pos = Doc.getCharPosFromPoint doc dp
             setPos pos
-            caretXPos <- vp.X
+            caretXPos <- dp.X
             upd false
 
     let mouseUp (ev : MouseEventArgs) =
@@ -1037,16 +1036,16 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     
     let mouseDoubleClick (ev : MouseEventArgs) =
         if ev.Button.HasFlag(MouseButtons.Left) then
-            let vp = getVp ev.Location
-            let sel = Doc.getWordSelection undoTree.Get vp
+            let dp = getDp ev.Location
+            let sel = Doc.getWordSelection undoTree.Get dp
             setSelection sel
             upd false
  
     let mouseMove (ev : MouseEventArgs) =
         if state = Idle then
-            let vp = getVp ev.Location
+            let dp = getDp ev.Location
             let doc = undoTree.Get
-            let idx = Doc.getCharIndexFromPoint doc vp
+            let idx = Doc.getCharIndexFromPoint doc dp
             let ci =
                 match idx with
                 | Some idx -> Doc.getColorInfo doc idx
@@ -1056,11 +1055,11 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
                 upd false
 
         elif state = LeftDown && ev.Button.HasFlag(MouseButtons.Left) then
-            let vp = getVp ev.Location
+            let dp = getDp ev.Location
             let doc = undoTree.Get
-            let pos = Doc.getCharPosFromPoint doc vp
+            let pos = Doc.getCharPosFromPoint doc dp
             setSelection { doc.Selection with CaretPos = pos }
-            caretXPos <- vp.X
+            caretXPos <- dp.X
             upd false
 
     let mouseWheel (ev : MouseEventArgs) =
