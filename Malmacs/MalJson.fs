@@ -99,37 +99,27 @@ type json =
 
   override x.ToString() = x.ToString(false)
 
-// --------------------------------------------------------------------------------------
-// JSON parser
-// --------------------------------------------------------------------------------------
+type private Parser(s : string) =
 
-type private JsonParser(jsonText:string) =
+    let mutable pos = 0
 
-    let mutable i = 0
-    let s = jsonText
-    
-    let buf = StringBuilder()
-
-    // Helper functions
     let skipWhitespace() =
-      while i < s.Length && Char.IsWhiteSpace s.[i] do
-        i <- i + 1
-    let isNumChar c =
-      Char.IsDigit c || c = '.' || c='e' || c='E' || c='+' || c='-'
+        while pos < s.Length && Char.IsWhiteSpace s.[pos] do
+            pos <- pos + 1
+
     let throw() =
       let msg =
         sprintf
           "Invalid JSON starting at character %d, snippet = \n----\n%s\n-----\njson = \n------\n%s\n-------" 
-          i (jsonText.[(max 0 (i-10))..(min (jsonText.Length-1) (i+10))]) (if jsonText.Length > 1000 then jsonText.Substring(0, 1000) else jsonText)
+          pos (s.[(max 0 (pos-10))..(min (s.Length-1) (pos+10))]) (if s.Length > 1000 then s.Substring(0, 1000) else s)
       failwith msg
     let ensure cond =
       if not cond then throw()
 
-    // Recursive descent parser for JSON that uses global mutable index
     let rec parseValue() =
         skipWhitespace()
-        ensure(i < s.Length)
-        match s.[i] with
+        ensure(pos < s.Length)
+        match s.[pos] with
         | '"' -> json.Jstring(parseString())
         | '-' -> parseNum()
         | '{' -> parseObject()
@@ -144,19 +134,20 @@ type private JsonParser(jsonText:string) =
 
     and parseRootValue() =
         skipWhitespace()
-        ensure(i < s.Length)
-        match s.[i] with
+        ensure(pos < s.Length)
+        match s.[pos] with
         | '{' -> parseObject()
         | '[' -> parseArray()
         | _ -> throw()
 
     and parseString() =
-        ensure(i < s.Length && s.[i] = '"')
-        i <- i + 1
-        while i < s.Length && s.[i] <> '"' do
-            if s.[i] = '\\' then
-                ensure(i+1 < s.Length)
-                match s.[i+1] with
+        ensure(pos < s.Length && s.[pos] = '"')
+        let buf = StringBuilder()
+        pos <- pos + 1
+        while pos < s.Length && s.[pos] <> '"' do
+            if s.[pos] = '\\' then
+                ensure(pos+1 < s.Length)
+                match s.[pos+1] with
                 | 'b' -> buf.Append('\b') |> ignore
                 | 'f' -> buf.Append('\f') |> ignore
                 | 'n' -> buf.Append('\n') |> ignore
@@ -166,7 +157,7 @@ type private JsonParser(jsonText:string) =
                 | '/' -> buf.Append('/') |> ignore
                 | '"' -> buf.Append('"') |> ignore
                 | 'u' ->
-                    ensure(i+5 < s.Length)
+                    ensure(pos+5 < s.Length)
                     let hexdigit d =
                         if d >= '0' && d <= '9' then int32 d - int32 '0'
                         elif d >= 'a' && d <= 'f' then int32 d - int32 'a' + 10
@@ -175,88 +166,90 @@ type private JsonParser(jsonText:string) =
                     let unicodeChar (s:string) =
                         if s.Length <> 4 then failwith "unicodeChar";
                         char (hexdigit s.[0] * 4096 + hexdigit s.[1] * 256 + hexdigit s.[2] * 16 + hexdigit s.[3])
-                    let ch = unicodeChar (s.Substring(i+2, 4))
+                    let ch = unicodeChar (s.Substring(pos+2, 4))
                     buf.Append(ch) |> ignore
-                    i <- i + 4  // the \ and u will also be skipped past further below
+                    pos <- pos + 4  // the \ and u will also be skipped past further below
                 | _ -> throw()
-                i <- i + 2  // skip past \ and next char
+                pos <- pos + 2  // skip past \ and next char
             else
-                buf.Append(s.[i]) |> ignore
-                i <- i + 1
-        ensure(i < s.Length && s.[i] = '"')
-        i <- i + 1
-        let str = buf.ToString()
-        buf.Clear() |> ignore
-        str
+                buf.Append(s.[pos]) |> ignore
+                pos <- pos + 1
+        ensure(pos < s.Length && s.[pos] = '"')
+        pos <- pos + 1
+        buf.ToString()
 
     and parseNum() =
-        let start = i
-        while i < s.Length && (isNumChar s.[i]) do
-            i <- i + 1
-        let len = i - start
+        let start = pos
+        while (pos < s.Length &&
+               (let c = s.[pos]
+                ('0' <= c && c <= '9') ||
+                (match c with
+                 | '.' | 'e' | 'E' | '+' | '-' -> true
+                 | _ -> false))) do pos <- pos + 1
+        let len = pos - start
         let sub = s.Substring(start, len)
         json.Jnumber sub
 
     and parsePair() =
         let key = parseString()
         skipWhitespace()
-        ensure(i < s.Length && s.[i] = ':')
-        i <- i + 1
+        ensure(pos < s.Length && s.[pos] = ':')
+        pos <- pos + 1
         skipWhitespace()
         key, parseValue()
 
     and parseObject() =
-        ensure(i < s.Length && s.[i] = '{')
-        i <- i + 1
+        ensure(pos < s.Length && s.[pos] = '{')
+        pos <- pos + 1
         skipWhitespace()
         let pairs = ResizeArray<_>()
-        if i < s.Length && s.[i] = '"' then
+        if pos < s.Length && s.[pos] = '"' then
             pairs.Add(parsePair())
             skipWhitespace()
-            while i < s.Length && s.[i] = ',' do
-                i <- i + 1
+            while pos < s.Length && s.[pos] = ',' do
+                pos <- pos + 1
                 skipWhitespace()
                 pairs.Add(parsePair())
                 skipWhitespace()
-        ensure(i < s.Length && s.[i] = '}')
-        i <- i + 1
+        ensure(pos < s.Length && s.[pos] = '}')
+        pos <- pos + 1
         json.Jobject(pairs.ToArray())
 
     and parseArray() =
-        ensure(i < s.Length && s.[i] = '[')
-        i <- i + 1
+        ensure(pos < s.Length && s.[pos] = '[')
+        pos <- pos + 1
         skipWhitespace()
         let vals = ResizeArray<_>()
-        if i < s.Length && s.[i] <> ']' then
+        if pos < s.Length && s.[pos] <> ']' then
             vals.Add(parseValue())
             skipWhitespace()
-            while i < s.Length && s.[i] = ',' do
-                i <- i + 1
+            while pos < s.Length && s.[pos] = ',' do
+                pos <- pos + 1
                 skipWhitespace()
                 vals.Add(parseValue())
                 skipWhitespace()
-        ensure(i < s.Length && s.[i] = ']')
-        i <- i + 1
+        ensure(pos < s.Length && s.[pos] = ']')
+        pos <- pos + 1
         json.Jarray(vals.ToArray())
 
     and parseLiteral(expected, r) =
-        ensure(i+expected.Length < s.Length)
+        ensure(pos+expected.Length < s.Length)
         for j in 0 .. expected.Length - 1 do
-            ensure(s.[i+j] = expected.[j])
-        i <- i + expected.Length
+            ensure(s.[pos+j] = expected.[j])
+        pos <- pos + expected.Length
         r
 
     // Start by parsing the top-level value
     member x.Parse() =
         let value = parseRootValue()
         skipWhitespace()
-        if i <> s.Length then
+        if pos <> s.Length then
             throw()
         value
 
     member x.ParseMultiple() =
         seq {
-            while i <> s.Length do
+            while pos <> s.Length do
                 yield parseRootValue()
                 skipWhitespace()
         }
@@ -265,26 +258,15 @@ type json with
 
   /// Parses the specified JSON string
   static member Parse(text) =
-    JsonParser(text).Parse()
+    Parser(text).Parse()
 
   /// Attempts to parse the specified JSON string
   static member TryParse(text) =
     try
-      Some <| JsonParser(text).Parse()
+      Some <| Parser(text).Parse()
     with
       | _ -> None
-
-  /// Loads JSON from the specified stream
-  static member Load(stream:Stream) =
-    use reader = new StreamReader(stream)
-    let text = reader.ReadToEnd()
-    JsonParser(text).Parse()
-
-  /// Loads JSON from the specified reader
-  static member Load(reader:TextReader) =
-    let text = reader.ReadToEnd()
-    JsonParser(text).Parse()
   
   /// Parses the specified string into multiple JSON values
   static member ParseMultiple(text) =
-    JsonParser(text).ParseMultiple()
+    Parser(text).ParseMultiple()
