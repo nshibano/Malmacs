@@ -46,20 +46,6 @@ let encode (enc : TextEncoding) (s : string) : byte array =
     | SJIS -> Encoding.GetEncoding("shift_jis").GetBytes(s)
     | EUCJP -> Encoding.GetEncoding("EUC-JP").GetBytes(s)
 
-let japaneseLikeliness (s : string) =
-    let mutable score = 0L
-    for i = 0 to s.Length - 1 do
-        let c = s.[i]
-        if '\x20' <= c && c <= '\x7E' then // ascii char
-            score <- score + 1L
-        elif '\u3040' <= c && c <= '\u309F' then // hiragana
-            score <- score + 1L
-        elif c = '\u30FB' then
-            () // Don't count this because EUCJP decoder outputs \u30FB as error marker.
-        elif '\u30A0' <= c && c <= '\u30FF' then // katakana
-            score <- score + 1L
-    score
-
 let byte_is_ascii (byte : byte) =
     match byte with
     | 0x04uy
@@ -68,27 +54,25 @@ let byte_is_ascii (byte : byte) =
     | 0x0Duy -> true
     | byte -> 0x20uy <= byte && byte <= 0x7Euy
 
-let guess (bytes : byte array) =
+let guess (bytes : byte array) : TextEncoding * string =
     if startsWithUtf8Bom bytes then
         (UTF8BOM, decodeUtf8 bytes)
     elif Array.forall byte_is_ascii bytes then
         (UTF8, decodeUtf8 bytes)
     else
-        let encodings = [| UTF8; SJIS; EUCJP |]
-        let success = Array.choose (fun (enc : TextEncoding) ->
-            try 
-                let s = enc.ToEncoding().GetString(bytes)
-                Some (enc, s)
-            with _ -> None) encodings
-        if success.Length = 0 then
-            UTF8, UTF8.ToEncoding().GetString(bytes)
-        elif success.Length = 1 then
-            success.[0]
-        else
-            let a = Array.map (fun (e : TextEncoding, s : string) -> (e, s, japaneseLikeliness s)) success
-            Array.sortInPlaceBy (fun (_, _, score) -> score) a
-            let enc, s, _ = a.[a.Length - 1]
-            (enc, s)
+        let cdet = Ude.CharsetDetector()
+        cdet.Feed(bytes, 0, bytes.Length)
+        cdet.DataEnd()
+        System.Diagnostics.Debug.WriteLine("cdet result: " + if cdet.Charset = null then "null" else cdet.Charset)
+        let e =
+            match cdet.Charset with
+            | "UTF-8" -> UTF8
+            | "EUC-JP" -> EUCJP
+            | "Shift-JIS" -> SJIS
+            | null -> SJIS
+            | _ -> SJIS
+
+        (e, e.ToEncoding().GetString(bytes))
 
 let decode (mode : TextDecodingMode) (bytes : byte array) : (TextEncoding * string) =
     match mode with
