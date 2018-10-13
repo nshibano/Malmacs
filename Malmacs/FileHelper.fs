@@ -63,7 +63,8 @@ let guess (bytes : byte array) : TextEncoding * string =
         let cdet = Ude.CharsetDetector()
         cdet.Feed(bytes, 0, bytes.Length)
         cdet.DataEnd()
-        System.Diagnostics.Debug.WriteLine("cdet result: " + if cdet.Charset = null then "null" else cdet.Charset)
+        //System.Diagnostics.Debug.WriteLine("cdet result: " + if cdet.Charset = null then "null" else cdet.Charset)
+
         let e =
             match cdet.Charset with
             | "UTF-8" -> UTF8
