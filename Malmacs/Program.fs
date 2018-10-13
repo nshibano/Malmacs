@@ -28,7 +28,7 @@ let main args =
 
     AppDomain.CurrentDomain.UnhandledException.Add(fun ev ->
         let logDir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-        let id = sprintf "Malmacs-%s-%08x-" (DateTime.Now.ToString("yyyyMMddHHmmss")) (Random().Next())
+        let id = sprintf "Malmacs-%s-%d-" (DateTime.Now.ToString("yyyyMMddHHmmss")) (Process.GetCurrentProcess().Id)
         let exn = ev.ExceptionObject
         File.WriteAllText(Path.Combine(logDir, id + "Crash-Exn.txt"), exn.ToString())
         for i = 0 to repl.Editors.Count - 1 do
