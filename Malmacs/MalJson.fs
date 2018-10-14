@@ -211,7 +211,7 @@ type private Parser(s : string) =
     let rec parseValue() =
         skipWhitespace()
         match s.[pos] with
-        | '"' -> json.Jstring(parseString())
+        | '"' -> Jstring (parseString())
         | '-' -> parseNumber()
         | '{' -> parseObject()
         | '[' -> parseArray()
@@ -224,7 +224,7 @@ type private Parser(s : string) =
             else invalidChar()
 
     and parseArray() =
-        let values = ResizeArray<_>()
+        let values = ResizeArray()
         skip "["
         skipWhitespace()
         if s.[pos] = ']' then
