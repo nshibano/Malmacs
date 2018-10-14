@@ -12,7 +12,7 @@ extern bool SetProcessDPIAware()
 let readJson path name =
     try
         let s = System.IO.File.ReadAllText(path)
-        MalJson.json.Parse(s)
+        MalJson.parse(s)
     with exn ->
         Debug.WriteLine(sprintf "%s json read failed: %s" name exn.Message)
         MalJson.json.Jobject [||]

@@ -105,7 +105,7 @@ let add (mal : Interpreter) =
     mal.Fun("captureGetValue", (fun mm (c : Capture) -> c.Value))
     
     mal.Fun("jsonRead", (fun mm s ->
-        try MalJson.json.Parse s
+        try MalJson.parse s
         with _ -> mal_failwith mm "Invalid json."))
     
     //mal.Fun("boom", (fun mm () -> failwith "boom" : unit))

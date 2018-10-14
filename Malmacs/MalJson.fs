@@ -117,39 +117,26 @@ type private Parser(s : string) =
             ensureChar()
             if s.[pos] <> c then invalidChar()
             pos <- pos + 1
-    
+
     let skipWhitespace() =
         while (pos < s.Length && 
                match s.[pos] with
                | '\x09' | '\x0a' | '\x0d' | '\x20' -> true
                | _ -> false) do pos <- pos + 1
-
-    let rec parseValue() =
-        skipWhitespace()
-        ensureChar()
-        let c = s.[pos]
-        match c with
-        | '"' -> json.Jstring(parseString())
-        | '-' -> parseNum()
-        | '{' -> parseObject()
-        | '[' -> parseArray()
-        | 't' -> skip "true"; Jtrue
-        | 'f' -> skip "false"; Jfalse
-        | 'n' -> skip "null"; Jnull
-        | _ ->
-            if '0' <= c && c <= '9' then
-                parseNum()
-            else invalidChar()
-
-    and parseRootValue() =
-        skipWhitespace()
-        ensureChar()
-        match s.[pos] with
-        | '{' -> parseObject()
-        | '[' -> parseArray()
-        | _ -> invalidChar()
-
-    and parseString() =
+    
+    let parseNum() =
+        let start = pos
+        while (pos < s.Length &&
+               (let c = s.[pos]
+                ('0' <= c && c <= '9') ||
+                (match c with
+                 | '.' | 'e' | 'E' | '+' | '-' -> true
+                 | _ -> false))) do pos <- pos + 1
+        let len = pos - start
+        let sub = s.Substring(start, len)
+        json.Jnumber sub
+    
+    let parseString() =
         skip "\""
         let buf = StringBuilder()
         let mutable cont = true
@@ -188,17 +175,45 @@ type private Parser(s : string) =
                 pos <- pos + 1
         buf.ToString()
 
-    and parseNum() =
-        let start = pos
-        while (pos < s.Length &&
-               (let c = s.[pos]
-                ('0' <= c && c <= '9') ||
-                (match c with
-                 | '.' | 'e' | 'E' | '+' | '-' -> true
-                 | _ -> false))) do pos <- pos + 1
-        let len = pos - start
-        let sub = s.Substring(start, len)
-        json.Jnumber sub
+    let rec parseValue() =
+        skipWhitespace()
+        ensureChar()
+        let c = s.[pos]
+        match c with
+        | '"' -> json.Jstring(parseString())
+        | '-' -> parseNum()
+        | '{' -> parseObject()
+        | '[' -> parseArray()
+        | 't' -> skip "true"; Jtrue
+        | 'f' -> skip "false"; Jfalse
+        | 'n' -> skip "null"; Jnull
+        | _ ->
+            if '0' <= c && c <= '9' then
+                parseNum()
+            else invalidChar()
+
+    and parseArray() =
+        skip "["
+        skipWhitespace()
+        let values = ResizeArray<_>()
+        ensureChar()
+        if s.[pos] = ']' then
+            pos <- pos + 1
+        else
+            values.Add(parseValue())
+            let mutable cont = true
+            while cont do
+                ensureChar()
+                match s.[pos] with
+                | ',' ->
+                    pos <- pos + 1
+                    skipWhitespace()
+                    values.Add(parseValue())
+                | ']' ->
+                    cont <- false
+                    pos <- pos + 1
+                | _ -> invalidChar()
+        json.Jarray(values.ToArray())
 
     and parsePair() =
         let key = parseString()
@@ -206,7 +221,7 @@ type private Parser(s : string) =
         skip ":"
         skipWhitespace()
         key, parseValue()
-
+    
     and parseObject() =
         skip "{"
         skipWhitespace()
@@ -233,58 +248,18 @@ type private Parser(s : string) =
         | _ -> invalidChar()
         json.Jobject(pairs.ToArray())
 
-    and parseArray() =
-        skip "["
-        skipWhitespace()
-        let vals = ResizeArray<_>()
+    let parseRootValue() =
         ensureChar()
-        if s.[pos] = ']' then
-            pos <- pos + 1
-        else
-            vals.Add(parseValue())
-            let mutable cont = true
-            while cont do
-                ensureChar()
-                match s.[pos] with
-                | ',' ->
-                    pos <- pos + 1
-                    skipWhitespace()
-                    vals.Add(parseValue())
-                | ']' ->
-                    cont <- false
-                    pos <- pos + 1
-                | _ -> invalidChar()
-        json.Jarray(vals.ToArray())
+        match s.[pos] with
+        | '{' -> parseObject()
+        | '[' -> parseArray()
+        | _ -> invalidChar()
 
-
-    // Start by parsing the top-level value
     member x.Parse() =
+        skipWhitespace()
         let value = parseRootValue()
         skipWhitespace()
-        if pos <> s.Length then
-            invalidChar()
+        if pos <> s.Length then invalidChar()
         value
 
-    member x.ParseMultiple() =
-        seq {
-            while pos <> s.Length do
-                yield parseRootValue()
-                skipWhitespace()
-        }
-
-type json with
-
-  /// Parses the specified JSON string
-  static member Parse(text) =
-    Parser(text).Parse()
-
-  /// Attempts to parse the specified JSON string
-  static member TryParse(text) =
-    try
-      Some <| Parser(text).Parse()
-    with
-      | _ -> None
-  
-  /// Parses the specified string into multiple JSON values
-  static member ParseMultiple(text) =
-    Parser(text).ParseMultiple()
+let parse (s : string) = Parser(s).Parse()
