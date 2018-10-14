@@ -110,15 +110,14 @@ type private Parser(s : string) =
     let mutable pos = 0
 
     let ensureChar() = if not (pos < s.Length) then raise UnexpectedEof
-    
     let invalidChar() = raise (InvalidChar pos)
 
     let skip (keyword : string) =
-        for i = 0 to keyword.Length - 1 do
-            if not (pos + i < s.Length) then raise UnexpectedEof
-            if not (s.[pos + i] = keyword.[i]) then raise (InvalidChar (pos + i))
-        pos <- pos + keyword.Length
-
+        for c in keyword do
+            ensureChar()
+            if s.[pos] <> c then invalidChar()
+            pos <- pos + 1
+    
     let skipWhitespace() =
         while (pos < s.Length && 
                match s.[pos] with
