@@ -75,11 +75,6 @@ type private Printer() =
     
         serialize 0 x
 
-    member this.ToString (oneLine : bool, x : json) =
-        let w = new StringWriter(CultureInfo.InvariantCulture)
-        this.WriteTo(w, oneLine, x)
-        w.GetStringBuilder().ToString()
-
     // Encode characters that are not valid in JS string. The implementation is based
     // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
     member this.JsonStringEncodeTo (w:TextWriter) (value:string) =
