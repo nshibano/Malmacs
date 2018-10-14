@@ -121,18 +121,50 @@ type private Parser(s : string) =
                match s.[pos] with
                | '\x09' | '\x0a' | '\x0d' | '\x20' -> true
                | _ -> false) do pos <- pos + 1
-    
-    let parseNum() =
-        let start = pos
+
+    let skipDigitStar() =
         while (pos < s.Length &&
-               (let c = s.[pos]
-                ('0' <= c && c <= '9') ||
-                (match c with
-                 | '.' | 'e' | 'E' | '+' | '-' -> true
-                 | _ -> false))) do pos <- pos + 1
-        let len = pos - start
-        let sub = s.Substring(start, len)
-        json.Jnumber sub
+               let c = s.[pos]
+               '0' <= c && c <= '9') do pos <- pos + 1
+
+    let skipDigitPlus() =
+        let c = s.[pos]
+        if not ('0' <= c && c <= '9') then invalidChar()
+        pos <- pos + 1
+        skipDigitStar()
+    
+    let parseNumber() =
+        let start = pos
+
+        // int
+        if s.[pos] = '-' then
+            pos <- pos + 1
+        let c = s.[pos]
+        if c = '0' then
+            pos <- pos + 1
+        elif '1' <= c && c <= '9' then
+            pos <- pos + 1
+            skipDigitStar()
+        else invalidChar()
+
+        // frac
+        if pos < s.Length then
+            let c = s.[pos]
+            if c = '.' then
+                pos <- pos + 1
+                skipDigitPlus()
+
+        // exp
+        if pos < s.Length then
+            let c = s.[pos]
+            if c = 'e' || c = 'E' then
+                pos <- pos + 1
+                let c = s.[pos]
+                if c = '+' || c = '-' then
+                    pos <- pos + 1
+                skipDigitPlus()
+
+        json.Jnumber (s.Substring(start, pos - start))
     
     let parseEscapedChar() =
         let c = s.[pos]
@@ -162,8 +194,8 @@ type private Parser(s : string) =
             c
 
     let parseString() =
-        skip "\""
         let buf = StringBuilder()
+        skip "\""
         let mutable cont = true
         while cont do
             let c0 = s.[pos]
@@ -183,7 +215,7 @@ type private Parser(s : string) =
         skipWhitespace()
         match s.[pos] with
         | '"' -> json.Jstring(parseString())
-        | '-' -> parseNum()
+        | '-' -> parseNumber()
         | '{' -> parseObject()
         | '[' -> parseArray()
         | 't' -> skip "true"; Jtrue
@@ -191,19 +223,20 @@ type private Parser(s : string) =
         | 'n' -> skip "null"; Jnull
         | c ->
             if '0' <= c && c <= '9' then
-                parseNum()
+                parseNumber()
             else invalidChar()
 
     and parseArray() =
+        let values = ResizeArray<_>()
         skip "["
         skipWhitespace()
-        let values = ResizeArray<_>()
         if s.[pos] = ']' then
             pos <- pos + 1
         else
             values.Add(parseValue())
             let mutable cont = true
             while cont do
+                skipWhitespace()
                 match s.[pos] with
                 | ',' ->
                     pos <- pos + 1
@@ -223,9 +256,9 @@ type private Parser(s : string) =
         key, parseValue()
     
     and parseObject() =
+        let pairs = ResizeArray()
         skip "{"
         skipWhitespace()
-        let pairs = ResizeArray()
         match s.[pos] with
         | '"' ->
             pairs.Add(parsePair())
