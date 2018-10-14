@@ -27,21 +27,23 @@ type json =
 type private Printer(singleLine : bool) =
 
     let sb = StringBuilder()
+    let mutable indentation = 0
+    let indentationIncrease = 2
+
+    let write (s : string) =
+        sb.Append(s) |> ignore
 
     let newLine =
         if not singleLine then
-            fun indentation plus ->
+            fun () ->
                 sb.Append("\r\n") |> ignore
-                sb.Append(' ', indentation + plus) |> ignore
-        else
-            fun _ _ -> ()
+                sb.Append(' ', indentation) |> ignore
+        else fun () -> ()
 
     let propSep =
         if not singleLine
         then "\": "
         else "\":"
-    
-    let write (s : string) = sb.Append(s) |> ignore
     
     // Encode characters that are not valid in JS string. The implementation is based
     // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
@@ -61,44 +63,47 @@ type private Printer(singleLine : bool) =
                 | '\\' -> write "\\\\"
                 | _ -> sb.Append(c) |> ignore
 
-    member this.WriteTo (x : json) =
+    let rec loop (json : json) =
+        match json with
+        | Jnull -> write "null"
+        | Jtrue -> write "true"
+        | Jfalse -> write "false"
+        | Jnumber number -> write number
+        | Jstring s ->
+            write "\""
+            writeChars s
+            write "\""
+        | Jobject properties ->
+            write "{"
+            indentation <- indentation +  indentationIncrease
+            for i = 0 to properties.Length - 1 do
+                let k, v = properties.[i]
+                if i > 0 then write ","
+                newLine()
+                write "\""
+                writeChars k
+                write propSep
+                loop v
+            indentation <- indentation - indentationIncrease
+            newLine()
+            write "}"
+        | Jarray elements ->
+            write "["
+            indentation <- indentation + indentationIncrease
+            for i = 0 to elements.Length - 1 do
+                if i > 0 then write ","
+                newLine()
+                loop elements.[i]
+            indentation <- indentation - indentationIncrease
+            if elements.Length > 0 then
+                newLine()
+            write "]"
 
-        let rec serialize indentation =
-            function
-            | Jnull -> write "null"
-            | Jtrue -> write "true"
-            | Jfalse -> write "false"
-            | Jnumber number -> write number
-            | Jstring s ->
-                write "\""
-                writeChars s
-                write "\""
-            | Jobject properties ->
-                write "{"
-                for i = 0 to properties.Length - 1 do
-                    let k,v = properties.[i]
-                    if i > 0 then write ","
-                    newLine indentation 2
-                    write "\""
-                    writeChars k
-                    write propSep
-                    serialize (indentation + 2) v
-                newLine indentation 0
-                write "}"
-            | Jarray elements ->
-                write "["
-                for i = 0 to elements.Length - 1 do
-                    if i > 0 then write ","
-                    newLine indentation 2
-                    serialize (indentation + 2) elements.[i]
-                if elements.Length > 0 then
-                    newLine indentation 0
-                write "]"
-    
-        serialize 0 x
+    member this.Print(json : json) =
+        loop json
         sb.ToString()
 
-let print (singleLine : bool) (json : json) = Printer(singleLine).WriteTo(json)
+let print (singleLine : bool) (json : json) = Printer(singleLine).Print(json)
 
 exception InvalidChar of int
 exception UnexpectedEof
