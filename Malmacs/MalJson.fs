@@ -99,83 +99,92 @@ type json =
 
   override x.ToString() = x.ToString(false)
 
+type StringBuilder with
+    member sb.Add(c : char) = sb.Append(c) |> ignore
+
+exception InvalidCharAt of int
+exception UnexpectedEof
+
 type private Parser(s : string) =
 
     let mutable pos = 0
 
-    let skipWhitespace() =
-        while pos < s.Length && Char.IsWhiteSpace s.[pos] do
-            pos <- pos + 1
+    let ensureChar() = if not (pos < s.Length) then raise UnexpectedEof
 
-    let throw() =
-      let msg =
-        sprintf
-          "Invalid JSON starting at character %d, snippet = \n----\n%s\n-----\njson = \n------\n%s\n-------" 
-          pos (s.[(max 0 (pos-10))..(min (s.Length-1) (pos+10))]) (if s.Length > 1000 then s.Substring(0, 1000) else s)
-      failwith msg
-    let ensure cond =
-      if not cond then throw()
+    let skip (keyword : string) =
+        for i = 0 to keyword.Length - 1 do
+            if not (pos + i < s.Length) then raise UnexpectedEof
+            if not (s.[pos + i] = keyword.[i]) then raise (InvalidCharAt (pos + i))
+        pos <- pos + keyword.Length
+
+    let skipWhitespace() =
+        while (pos < s.Length && 
+               match s.[pos] with
+               | '\x09' | '\x0a' | '\x0d' | '\x20' -> true
+               | _ -> false) do pos <- pos + 1
 
     let rec parseValue() =
         skipWhitespace()
-        ensure(pos < s.Length)
-        match s.[pos] with
+        ensureChar()
+        let c = s.[pos]
+        match c with
         | '"' -> json.Jstring(parseString())
         | '-' -> parseNum()
         | '{' -> parseObject()
         | '[' -> parseArray()
-        | 't' -> parseLiteral("true", Jtrue)
-        | 'f' -> parseLiteral("false", Jfalse)
-        | 'n' -> parseLiteral("null", Jnull)
-        | c ->
-            if Char.IsDigit(c) then
+        | 't' -> skip "true"; Jtrue
+        | 'f' -> skip "false"; Jfalse
+        | 'n' -> skip "null"; Jnull
+        | _ ->
+            if '0' <= c && c <= '9' then
                 parseNum()
-            else throw()
+            else raise (InvalidCharAt pos)
 
     and parseRootValue() =
         skipWhitespace()
-        ensure(pos < s.Length)
+        ensureChar()
         match s.[pos] with
         | '{' -> parseObject()
         | '[' -> parseArray()
-        | _ -> throw()
+        | _ -> raise (InvalidCharAt pos)
 
     and parseString() =
-        ensure(pos < s.Length && s.[pos] = '"')
+        skip "\""
         let buf = StringBuilder()
-        pos <- pos + 1
-        while pos < s.Length && s.[pos] <> '"' do
-            if s.[pos] = '\\' then
-                ensure(pos+1 < s.Length)
-                match s.[pos+1] with
-                | 'b' -> buf.Append('\b') |> ignore
-                | 'f' -> buf.Append('\f') |> ignore
-                | 'n' -> buf.Append('\n') |> ignore
-                | 't' -> buf.Append('\t') |> ignore
-                | 'r' -> buf.Append('\r') |> ignore
-                | '\\' -> buf.Append('\\') |> ignore
-                | '/' -> buf.Append('/') |> ignore
-                | '"' -> buf.Append('"') |> ignore
-                | 'u' ->
-                    ensure(pos+5 < s.Length)
-                    let hexdigit d =
-                        if d >= '0' && d <= '9' then int32 d - int32 '0'
-                        elif d >= 'a' && d <= 'f' then int32 d - int32 'a' + 10
-                        elif d >= 'A' && d <= 'F' then int32 d - int32 'A' + 10
-                        else failwith "hexdigit"
-                    let unicodeChar (s:string) =
-                        if s.Length <> 4 then failwith "unicodeChar";
-                        char (hexdigit s.[0] * 4096 + hexdigit s.[1] * 256 + hexdigit s.[2] * 16 + hexdigit s.[3])
-                    let ch = unicodeChar (s.Substring(pos+2, 4))
-                    buf.Append(ch) |> ignore
-                    pos <- pos + 4  // the \ and u will also be skipped past further below
-                | _ -> throw()
-                pos <- pos + 2  // skip past \ and next char
-            else
-                buf.Append(s.[pos]) |> ignore
+        let mutable cont = true
+        while cont do
+            ensureChar()
+            let c0 = s.[pos]
+            match c0 with
+            | '"' ->
+                cont <- false
                 pos <- pos + 1
-        ensure(pos < s.Length && s.[pos] = '"')
-        pos <- pos + 1
+            | '\\' ->
+                if pos + 1 < s.Length then
+                    let c1 = s.[pos + 1]
+                    match c1 with
+                    | 'b' -> buf.Add('\b'); pos <- pos + 2
+                    | 'f' -> buf.Add('\f'); pos <- pos + 2
+                    | 'n' -> buf.Add('\n'); pos <- pos + 2
+                    | 't' -> buf.Add('\t'); pos <- pos + 2
+                    | 'r' -> buf.Add('\r'); pos <- pos + 2
+                    | '\\' -> buf.Add('\\'); pos <- pos + 2
+                    | '/' -> buf.Add('/'); pos <- pos + 2
+                    | '"' -> buf.Add('"'); pos <- pos + 2
+                    | 'u' ->
+                        for i = 2 to 5 do
+                            if not (pos + i < s.Length) then raise UnexpectedEof
+                            let ci = s.[pos + i]
+                            if not ('0' <= ci && ci <= '9' ||
+                                    'a' <= ci && ci <= 'f' ||
+                                    'A' <= ci && ci <= 'F') then raise (InvalidCharAt (pos + i))
+                        buf.Add(char (Convert.ToInt32(s.Substring(pos + 2, 4), 16)))
+                        pos <- pos + 6
+                    | _ -> raise (InvalidCharAt (pos + 1))
+                else raise UnexpectedEof
+            | _ ->
+                buf.Add(s.[pos])
+                pos <- pos + 1
         buf.ToString()
 
     and parseNum() =
@@ -193,58 +202,66 @@ type private Parser(s : string) =
     and parsePair() =
         let key = parseString()
         skipWhitespace()
-        ensure(pos < s.Length && s.[pos] = ':')
-        pos <- pos + 1
+        skip ":"
         skipWhitespace()
         key, parseValue()
 
     and parseObject() =
-        ensure(pos < s.Length && s.[pos] = '{')
-        pos <- pos + 1
+        skip "{"
         skipWhitespace()
-        let pairs = ResizeArray<_>()
-        if pos < s.Length && s.[pos] = '"' then
+        let pairs = ResizeArray()
+        ensureChar()
+        match s.[pos] with
+        | '"' ->
             pairs.Add(parsePair())
-            skipWhitespace()
-            while pos < s.Length && s.[pos] = ',' do
-                pos <- pos + 1
+            let mutable cont = true
+            while cont do
                 skipWhitespace()
-                pairs.Add(parsePair())
-                skipWhitespace()
-        ensure(pos < s.Length && s.[pos] = '}')
-        pos <- pos + 1
+                ensureChar()
+                match s.[pos] with
+                | ',' ->
+                    pos <- pos + 1
+                    skipWhitespace()
+                    pairs.Add(parsePair())
+                | '}' ->
+                    cont <- false
+                    pos <- pos + 1
+                | _ -> raise (InvalidCharAt pos)
+        | '}' ->
+            pos <- pos + 1
+        | _ -> raise (InvalidCharAt pos)
         json.Jobject(pairs.ToArray())
 
     and parseArray() =
-        ensure(pos < s.Length && s.[pos] = '[')
-        pos <- pos + 1
+        skip "["
         skipWhitespace()
         let vals = ResizeArray<_>()
-        if pos < s.Length && s.[pos] <> ']' then
+        ensureChar()
+        if s.[pos] = ']' then
+            pos <- pos + 1
+        else
             vals.Add(parseValue())
-            skipWhitespace()
-            while pos < s.Length && s.[pos] = ',' do
-                pos <- pos + 1
-                skipWhitespace()
-                vals.Add(parseValue())
-                skipWhitespace()
-        ensure(pos < s.Length && s.[pos] = ']')
-        pos <- pos + 1
+            let mutable cont = true
+            while cont do
+                ensureChar()
+                match s.[pos] with
+                | ',' ->
+                    pos <- pos + 1
+                    skipWhitespace()
+                    vals.Add(parseValue())
+                | ']' ->
+                    cont <- false
+                    pos <- pos + 1
+                | _ -> raise (InvalidCharAt pos)
         json.Jarray(vals.ToArray())
 
-    and parseLiteral(expected, r) =
-        ensure(pos+expected.Length < s.Length)
-        for j in 0 .. expected.Length - 1 do
-            ensure(s.[pos+j] = expected.[j])
-        pos <- pos + expected.Length
-        r
 
     // Start by parsing the top-level value
     member x.Parse() =
         let value = parseRootValue()
         skipWhitespace()
         if pos <> s.Length then
-            throw()
+            raise (InvalidCharAt pos)
         value
 
     member x.ParseMultiple() =
