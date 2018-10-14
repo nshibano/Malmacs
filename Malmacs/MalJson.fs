@@ -102,7 +102,7 @@ type json =
 type StringBuilder with
     member sb.Add(c : char) = sb.Append(c) |> ignore
 
-exception InvalidCharAt of int
+exception InvalidChar of int
 exception UnexpectedEof
 
 type private Parser(s : string) =
@@ -110,11 +110,13 @@ type private Parser(s : string) =
     let mutable pos = 0
 
     let ensureChar() = if not (pos < s.Length) then raise UnexpectedEof
+    
+    let invalidChar() = raise (InvalidChar pos)
 
     let skip (keyword : string) =
         for i = 0 to keyword.Length - 1 do
             if not (pos + i < s.Length) then raise UnexpectedEof
-            if not (s.[pos + i] = keyword.[i]) then raise (InvalidCharAt (pos + i))
+            if not (s.[pos + i] = keyword.[i]) then raise (InvalidChar (pos + i))
         pos <- pos + keyword.Length
 
     let skipWhitespace() =
@@ -138,7 +140,7 @@ type private Parser(s : string) =
         | _ ->
             if '0' <= c && c <= '9' then
                 parseNum()
-            else raise (InvalidCharAt pos)
+            else invalidChar()
 
     and parseRootValue() =
         skipWhitespace()
@@ -146,7 +148,7 @@ type private Parser(s : string) =
         match s.[pos] with
         | '{' -> parseObject()
         | '[' -> parseArray()
-        | _ -> raise (InvalidCharAt pos)
+        | _ -> invalidChar()
 
     and parseString() =
         skip "\""
@@ -177,10 +179,10 @@ type private Parser(s : string) =
                             let ci = s.[pos + i]
                             if not ('0' <= ci && ci <= '9' ||
                                     'a' <= ci && ci <= 'f' ||
-                                    'A' <= ci && ci <= 'F') then raise (InvalidCharAt (pos + i))
+                                    'A' <= ci && ci <= 'F') then raise (InvalidChar (pos + i))
                         buf.Add(char (Convert.ToInt32(s.Substring(pos + 2, 4), 16)))
                         pos <- pos + 6
-                    | _ -> raise (InvalidCharAt (pos + 1))
+                    | _ -> raise (InvalidChar (pos + 1))
                 else raise UnexpectedEof
             | _ ->
                 buf.Add(s.[pos])
@@ -226,10 +228,10 @@ type private Parser(s : string) =
                 | '}' ->
                     cont <- false
                     pos <- pos + 1
-                | _ -> raise (InvalidCharAt pos)
+                | _ -> invalidChar()
         | '}' ->
             pos <- pos + 1
-        | _ -> raise (InvalidCharAt pos)
+        | _ -> invalidChar()
         json.Jobject(pairs.ToArray())
 
     and parseArray() =
@@ -252,7 +254,7 @@ type private Parser(s : string) =
                 | ']' ->
                     cont <- false
                     pos <- pos + 1
-                | _ -> raise (InvalidCharAt pos)
+                | _ -> invalidChar()
         json.Jarray(vals.ToArray())
 
 
@@ -261,7 +263,7 @@ type private Parser(s : string) =
         let value = parseRootValue()
         skipWhitespace()
         if pos <> s.Length then
-            raise (InvalidCharAt pos)
+            invalidChar()
         value
 
     member x.ParseMultiple() =
