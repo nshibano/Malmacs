@@ -104,8 +104,12 @@ let add (mal : Interpreter) =
     mal.Fun("captureGetLength", (fun mm (c : Capture) -> c.Length))
     mal.Fun("captureGetValue", (fun mm (c : Capture) -> c.Value))
     
-    mal.Fun("jsonRead", (fun mm s ->
-        try MalJson.parse s
-        with _ -> mal_failwith mm "Invalid json."))
+    mal.Fun("jsonParse", (fun mm s ->
+        try MalJson.parse s with
+        | MalJson.InvalidChar pos -> mal_failwith mm (sprintf "Invalid char at pos %d" pos)
+        | MalJson.UnexpectedEof -> mal_failwith mm "Unexpected EOF"))
+    
+    mal.Fun("jsonPrint", (fun mm (singleLine : bool) (json : MalJson.json) ->
+        MalJson.print singleLine json))
     
     //mal.Fun("boom", (fun mm () -> failwith "boom" : unit))

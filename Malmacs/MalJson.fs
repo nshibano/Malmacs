@@ -16,15 +16,17 @@ open System.Globalization
 open System.Text
 
 type json =
-  | Jstring of string
-  | Jnumber of string
-  | Jobject of (string * json) array
-  | Jarray of json array
-  | Jtrue
-  | Jfalse
-  | Jnull
+    | Jstring of string
+    | Jnumber of string
+    | Jobject of (string * json) array
+    | Jarray of json array
+    | Jtrue
+    | Jfalse
+    | Jnull
+  
+type private Printer() =
 
-  member x.WriteTo (w : TextWriter, singleLine : bool) =
+  member this.WriteTo (w : TextWriter, singleLine : bool, x : json) =
 
     let newLine =
       if not singleLine then
@@ -45,7 +47,7 @@ type json =
       | Jnumber number -> w.Write number
       | Jstring s ->
           w.Write "\""
-          json.JsonStringEncodeTo w s
+          this.JsonStringEncodeTo w s
           w.Write "\""
       | Jobject properties ->
           w.Write "{"
@@ -54,7 +56,7 @@ type json =
             if i > 0 then w.Write ","
             newLine indentation 2
             w.Write "\""
-            json.JsonStringEncodeTo w k
+            this.JsonStringEncodeTo w k
             w.Write propSep
             serialize (indentation + 2) v
           newLine indentation 0
@@ -69,11 +71,16 @@ type json =
             newLine indentation 0
           w.Write "]"
   
-    serialize 0 x 
+    serialize 0 x
+
+  member this.ToString (oneLine : bool, x : json) =
+    let w = new StringWriter(CultureInfo.InvariantCulture)
+    this.WriteTo(w, oneLine, x)
+    w.GetStringBuilder().ToString()
 
   // Encode characters that are not valid in JS string. The implementation is based
   // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
-  static member internal JsonStringEncodeTo (w:TextWriter) (value:string) =
+  member this.JsonStringEncodeTo (w:TextWriter) (value:string) =
     if String.IsNullOrEmpty value then ()
     else 
       for i = 0 to value.Length - 1 do
@@ -92,12 +99,10 @@ type json =
           | '\\' -> w.Write "\\\\"
           | _    -> w.Write c
 
-  member x.ToString (oneLine : bool) =
-    let w = new StringWriter(CultureInfo.InvariantCulture)
-    x.WriteTo(w, oneLine)
-    w.GetStringBuilder().ToString()
-
-  override x.ToString() = x.ToString(false)
+let print (singleLine : bool) (json : json) =
+    let w = new StringWriter()
+    Printer().WriteTo(w, singleLine, json)
+    w.ToString()
 
 exception InvalidChar of int
 exception UnexpectedEof
