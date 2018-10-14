@@ -99,9 +99,6 @@ type json =
 
   override x.ToString() = x.ToString(false)
 
-type StringBuilder with
-    member sb.Add(c : char) = sb.Append(c) |> ignore
-
 exception InvalidChar of int
 exception UnexpectedEof
 
@@ -205,9 +202,9 @@ type private Parser(s : string) =
                 pos <- pos + 1
             | '\\' ->
                 pos <- pos + 1
-                buf.Add(parseEscapedChar())
+                buf.Append(parseEscapedChar()) |> ignore
             | _ ->
-                buf.Add(s.[pos])
+                buf.Append(s.[pos]) |> ignore
                 pos <- pos + 1
         buf.ToString()
 
