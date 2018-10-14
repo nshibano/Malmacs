@@ -110,6 +110,7 @@ let add (mal : Interpreter) =
         | MalJson.UnexpectedEof -> mal_failwith mm "Unexpected EOF"))
     
     mal.Fun("jsonPrint", (fun mm (singleLine : bool) (json : MalJson.json) ->
-        MalJson.print singleLine json))
+        try MalJson.print singleLine json with
+        | MalJson.InvalidNumberLiteral s -> mal_failwith mm (sprintf "Invalid number literal (%s)" (MalJson.print true (MalJson.Jstring s)))))
     
     //mal.Fun("boom", (fun mm () -> failwith "boom" : unit))

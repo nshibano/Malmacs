@@ -14,6 +14,7 @@ module Malmacs.MalJson
 open System
 open System.Globalization
 open System.Text
+open System.Text.RegularExpressions
 
 type json =
     | Jstring of string
@@ -23,6 +24,10 @@ type json =
     | Jtrue
     | Jfalse
     | Jnull
+
+exception InvalidNumberLiteral of string
+
+let reNumberLiteral = Regex(@"\A-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?\z", RegexOptions.ExplicitCapture)
 
 type private Printer(singleLine : bool) =
 
@@ -68,7 +73,10 @@ type private Printer(singleLine : bool) =
         | Jnull -> write "null"
         | Jtrue -> write "true"
         | Jfalse -> write "false"
-        | Jnumber number -> write number
+        | Jnumber number ->
+            if not (reNumberLiteral.IsMatch(number)) then
+                raise (InvalidNumberLiteral number)
+            write number
         | Jstring s ->
             write "\""
             writeChars s
