@@ -23,83 +23,82 @@ type json =
     | Jtrue
     | Jfalse
     | Jnull
-  
-type private Printer() =
 
-    member this.WriteTo (w : TextWriter, singleLine : bool, x : json) =
+type private Printer(singleLine : bool) =
 
-        let newLine =
-            if not singleLine then
-                fun indentation plus ->
-                    w.WriteLine()
-                    System.String(' ', indentation + plus) |> w.Write
-            else
-                fun _ _ -> ()
+    let sb = StringBuilder()
 
-        let propSep =
-            if not singleLine
-            then "\": "
-            else "\":"
+    let newLine =
+        if not singleLine then
+            fun indentation plus ->
+                sb.Append("\r\n") |> ignore
+                sb.Append(' ', indentation + plus) |> ignore
+        else
+            fun _ _ -> ()
+
+    let propSep =
+        if not singleLine
+        then "\": "
+        else "\":"
+    
+    let write (s : string) = sb.Append(s) |> ignore
+    
+    // Encode characters that are not valid in JS string. The implementation is based
+    // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
+    let writeChars(chars : string) =
+        for c in chars do
+            let ci = int c
+            if ci >= 0 && ci <= 7 || ci = 11 || ci >= 14 && ci <= 31 then
+                Printf.bprintf sb "\\u%04x" ci
+            else 
+                match c with
+                | '\b' -> write "\\b"
+                | '\t' -> write "\\t"
+                | '\n' -> write "\\n"
+                | '\f' -> write "\\f"
+                | '\r' -> write "\\r"
+                | '"' -> write "\\\""
+                | '\\' -> write "\\\\"
+                | _ -> sb.Append(c) |> ignore
+
+    member this.WriteTo (x : json) =
 
         let rec serialize indentation =
             function
-            | Jnull -> w.Write "null"
-            | Jtrue -> w.Write "true"
-            | Jfalse -> w.Write "false"
-            | Jnumber number -> w.Write number
+            | Jnull -> write "null"
+            | Jtrue -> write "true"
+            | Jfalse -> write "false"
+            | Jnumber number -> write number
             | Jstring s ->
-                w.Write "\""
-                this.JsonStringEncodeTo w s
-                w.Write "\""
+                write "\""
+                writeChars s
+                write "\""
             | Jobject properties ->
-                w.Write "{"
+                write "{"
                 for i = 0 to properties.Length - 1 do
                     let k,v = properties.[i]
-                    if i > 0 then w.Write ","
+                    if i > 0 then write ","
                     newLine indentation 2
-                    w.Write "\""
-                    this.JsonStringEncodeTo w k
-                    w.Write propSep
+                    write "\""
+                    writeChars k
+                    write propSep
                     serialize (indentation + 2) v
                 newLine indentation 0
-                w.Write "}"
+                write "}"
             | Jarray elements ->
-                w.Write "["
+                write "["
                 for i = 0 to elements.Length - 1 do
-                    if i > 0 then w.Write ","
+                    if i > 0 then write ","
                     newLine indentation 2
                     serialize (indentation + 2) elements.[i]
                 if elements.Length > 0 then
                     newLine indentation 0
-                w.Write "]"
+                write "]"
     
         serialize 0 x
+        sb.ToString()
 
-    // Encode characters that are not valid in JS string. The implementation is based
-    // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
-    member this.JsonStringEncodeTo (w:TextWriter) (value:string) =
-        if String.IsNullOrEmpty value then ()
-        else 
-            for i = 0 to value.Length - 1 do
-                let c = value.[i]
-                let ci = int c
-                if ci >= 0 && ci <= 7 || ci = 11 || ci >= 14 && ci <= 31 then
-                    w.Write("\\u{0:x4}", ci) |> ignore
-                else 
-                    match c with
-                    | '\b' -> w.Write "\\b"
-                    | '\t' -> w.Write "\\t"
-                    | '\n' -> w.Write "\\n"
-                    | '\f' -> w.Write "\\f"
-                    | '\r' -> w.Write "\\r"
-                    | '"' -> w.Write "\\\""
-                    | '\\' -> w.Write "\\\\"
-                    | _ -> w.Write c
-
-let print (singleLine : bool) (json : json) =
-    let w = new StringWriter()
-    Printer().WriteTo(w, singleLine, json)
-    w.ToString()
+let print (singleLine : bool) (json : json) = Printer(singleLine).WriteTo(json)
 
 exception InvalidChar of int
 exception UnexpectedEof
