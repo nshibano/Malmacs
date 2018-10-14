@@ -1,5 +1,4 @@
-﻿module Malmacs.MalJson
-/// Derived from https://github.com/fsharp/FSharp.Data/blob/master/src/Json/JsonValue.fs
+﻿// Derived from https://github.com/fsharp/FSharp.Data/blob/master/src/Json/JsonValue.fs
 
 // --------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation 2005-2012.
@@ -10,8 +9,9 @@
 // A simple F# portable parser for JSON data
 // --------------------------------------------------------------------------------------
 
+module Malmacs.MalJson
+
 open System
-open System.IO
 open System.Globalization
 open System.Text
 
