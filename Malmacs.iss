@@ -29,18 +29,14 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "Malmacs\bin\Release\Malmacs.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FSharp.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\FSharp.Core.xml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FsMiniMAL.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\init.mal"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Malmacs.exe.config"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\Malmacs.XML"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.Shell.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.Shell.xml"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.xml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\System.Collections.Immutable.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\System.Collections.Immutable.xml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\System.ValueTuple.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Malmacs\bin\Release\Ude.dll"; DestDir: "{app}"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
