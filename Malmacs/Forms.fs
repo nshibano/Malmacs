@@ -497,7 +497,7 @@ and Repl() as this =
         mal <- Some (interp, malproc)
         upd()
     
-    let shutdownUpd() =
+    let shutdown() =
         mal <- None
         chunkQueue.Clear()
         messageQueue.Clear()
@@ -506,7 +506,11 @@ and Repl() as this =
             e.HighlightingState <- EHSdone
             e.LastlyHighlightingInitiatedContentId <- -1
         logInput "Interpreter has been shut down.\r\n"
-        upd()
+
+    let rebootUpd() =
+        if mal.IsSome then
+            shutdown()
+        bootUpd()
 
     let key_down (ev : KeyEventArgs) =
         let key = ev.KeyData
@@ -559,7 +563,7 @@ and Repl() as this =
             ev.Handled <- true
         | Keys.F12 ->
             if mal.IsSome then
-                shutdownUpd()
+                shutdown()
             bootUpd()
         | _ -> ()
     do
@@ -571,7 +575,8 @@ and Repl() as this =
                 new ToolStripMenuItem("New", null, fun o ev -> new_editor()),
                 new ToolStripMenuItem("Open", null, fun o ev -> open_file_with_new_editor()),
                 new ToolStripMenuItem("Boot", null, (fun o ev -> bootUpd())),
-                new ToolStripMenuItem("Shutdown", null, fun o ev -> shutdownUpd()))) |> ignore
+                new ToolStripMenuItem("Shutdown", null, fun o ev -> shutdown(); upd()),
+                new ToolStripMenuItem("Reboot", null, fun o ev -> rebootUpd()))) |> ignore
 
         textArea.Paint.Add(paint)
         textArea.KeyPress.Add(key_press)
