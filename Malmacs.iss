@@ -31,7 +31,7 @@ Source: "Malmacs\bin\Release\Malmacs.exe"; DestDir: "{app}"; Flags: ignoreversio
 Source: "Malmacs\bin\Release\Malmacs.config.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FSharp.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FsMiniMAL.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\init.mal"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Malmacs\bin\Release\Mal\init.mal"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Malmacs.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.Shell.dll"; DestDir: "{app}"; Flags: ignoreversion
