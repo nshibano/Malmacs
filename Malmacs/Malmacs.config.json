@@ -1,5 +1,5 @@
 ﻿{
   "init": [
-    "init.mal"
+    "mal\\init.mal"
   ]
 }

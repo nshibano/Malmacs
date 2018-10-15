@@ -72,12 +72,12 @@
     <Compile Include="Forms.fs" />
     <Compile Include="Program.fs" />
     <Content Include="packages.config" />
-    <Content Include="init.mal">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <EmbeddedResource Include="TextFileIcon.ico" />
     <EmbeddedResource Include="PlayIcon.ico" />
     <Content Include="Malmacs.config.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Mal\init.mal">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
