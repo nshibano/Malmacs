@@ -325,6 +325,11 @@ let toString (json : json) =
     | Jstring s -> s
     | _ -> invalidOperation()
 
+let toStringArray (json : json) =
+    match json with
+    | Jarray ary -> Array.map toString ary
+    | _ -> invalidOperation()
+
 let toBool (json : json) =
     match json with
     | Jtrue -> true

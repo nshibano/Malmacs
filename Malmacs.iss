@@ -28,6 +28,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "Malmacs\bin\Release\Malmacs.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Malmacs\bin\Release\Malmacs.config.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FSharp.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FsMiniMAL.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\init.mal"; DestDir: "{app}"; Flags: ignoreversion

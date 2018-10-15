@@ -60,6 +60,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="CombinedKeys.fs" />
     <Compile Include="Win32.fs" />
+    <Compile Include="MalJson.fs" />
     <Compile Include="Common.fs" />
     <Compile Include="ClickThrough.fs" />
     <Compile Include="TreeList.fs" />
@@ -67,7 +68,6 @@
     <Compile Include="Doc.fs" />
     <Compile Include="FileHelper.fs" />
     <Compile Include="UndoTree.fs" />
-    <Compile Include="MalJson.fs" />
     <Compile Include="MalLibs.fs" />
     <Compile Include="Forms.fs" />
     <Compile Include="Program.fs" />
@@ -77,6 +77,9 @@
     </Content>
     <EmbeddedResource Include="TextFileIcon.ico" />
     <EmbeddedResource Include="PlayIcon.ico" />
+    <Content Include="Malmacs.config.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Core">

@@ -13,7 +13,10 @@ open System.IO
 open System.Reflection
 
 let exeDir = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
-let initMalPath = Path.Combine(exeDir, "init.mal")
+
+let config =
+    try MalJson.parse (File.ReadAllText(Path.Combine(exeDir, "Malmacs.config.json")))
+    with _ -> MalJson.Jnull
 
 exception DontCareException
 let dontcare() = raise DontCareException

@@ -48,7 +48,7 @@ and Repl() as this =
     let textArea = new OpaqueIMEControl()
     let vscroll = new VScrollBar()
 
-    let mutable mal : (Interpreter * value ref) option = None //FsMiniMAL.Top.createInterpreter()
+    let mutable mal : (Interpreter * value ref) option = None
     let chunkQueue = List<string>()
     let messageQueue = List<Message>()
     let runningQueue = List<MalThread>()
@@ -256,8 +256,7 @@ and Repl() as this =
                
         else false
 
-    let run (src : string) =
-        chunkQueue.Add(src)
+    let run (src : string) = chunkQueue.Add(src)
     
     let point_sub (a : Point) (b : Point) = Point(a.X - b.X, a.Y - b.Y)
 
@@ -486,10 +485,15 @@ and Repl() as this =
                     Some (s, rangeOfLocation loc))
 
         interp.MessageHook <- messageHook
-        try
-            let src = File.ReadAllText(Common.initMalPath)
-            run src
-        with _ -> ()
+        let names =
+            try MalJson.toStringArray (MalJson.find Common.config ["init"])
+            with _ -> [||]
+        for name in names do
+            try 
+                let path = Path.Combine(Common.exeDir, name)
+                let src = File.ReadAllText(path)
+                run src
+            with _ -> ()
         mal <- Some (interp, malproc)
         upd()
     
