@@ -1,4 +1,4 @@
-﻿let sample = """[
+﻿let sample1 = """[
   {
     "_id": "5bc3b1b7c0d3a4de884f6a68",
     "index": 0,
@@ -457,13 +457,45 @@
   }
 ]"""
 
+let sample2 = """[
+  "\u0000\u0001\b\f\n\t\r\\\"",
+  "𠮷野家",
+  0,
+  1,
+  1.111,
+  0e0,
+  1.1111e+1111
+]"""
+
 open System
 open Malmacs
 
 [<EntryPoint>]
 let main argv =
-    let json = MalJson.parse sample
-    let printed = MalJson.print false json
-    printfn "%b" (printed = sample)
+    let ensure cond = if not cond then failwith ""
+    let json1 = MalJson.parse sample1
+    ensure (MalJson.print false json1 = sample1)
+    ensure (MalJson.parse (MalJson.print true json1) = json1)
+    ensure (MalJson.print false (MalJson.parse sample2) = sample2)
+    
+    let error input pos =
+        let errorPos =
+            try
+                MalJson.parse input |> ignore
+                -1
+            with
+            | MalJson.InvalidChar i -> i
+            | MalJson.UnexpectedEof -> input.Length
+        if errorPos <> pos then failwithf ""
+    
+    error "[00]" 2
+    error "[1.]" 3
+    error "[1.0e]" 5
+    error "[\"a" 3
+    error "[\"aa" 4
+    error "[\"\\u00\"]" 6
+    error "[\"\\u000\"]" 7
+
+    printfn "done."
     Console.ReadKey() |> ignore
     0
