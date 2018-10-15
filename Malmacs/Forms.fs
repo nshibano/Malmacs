@@ -562,9 +562,8 @@ and Repl() as this =
             upd()
             ev.Handled <- true
         | Keys.F12 ->
-            if mal.IsSome then
-                shutdown()
-            bootUpd()
+            rebootUpd()
+            ev.Handled <- true
         | _ -> ()
     do
         this.Icon <- new Icon(System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Malmacs.PlayIcon.ico"))
@@ -618,7 +617,7 @@ and Repl() as this =
     member this.Tick() = tick()
     member this.InitiateHighlighting e = initiateHighlighting e
     member this.InitiateHighlightingIfTextChanged e = initiateHighlightingIfTextChanged e
-
+    member this.RebootUpd() = rebootUpd()
     override this.OnFormClosing(ev) =
         if ev.CloseReason <> CloseReason.ApplicationExitCall then
             this.Hide()
@@ -901,6 +900,9 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         //| Keys.F6 -> failwith "boom"
         | Keys.F9 ->
             repl.Show()
+            ev.Handled <- true
+        | Keys.F12->
+            repl.RebootUpd()
             ev.Handled <- true
         | _ -> ()
 
