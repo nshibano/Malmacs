@@ -301,7 +301,7 @@ type private Parser(s : string) =
             skipWhitespace()
             let value = parseRootValue()
             skipWhitespace()
-            if pos <> s.Length then invalidChar()
+            if pos < s.Length then invalidChar()
             value
         with :? IndexOutOfRangeException -> raise UnexpectedEof
 
