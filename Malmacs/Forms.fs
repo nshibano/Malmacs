@@ -53,17 +53,19 @@ and Repl() as this =
     let messageQueue = List<Message>()
     let runningQueue = List<MalThread>()
 
-    let cols = 80
+    let cols = 100
 
     let mutable logDoc =
-        Doc.create
+        let info = 
             { FontSpec = Ja_Consolas_MSGothic
               FontSize = 20
-              PageWidth = max (20 / 2 * cols) textArea.ClientRectangle.Width
+              PageWidth = 1000
               TabWidthInSpaces = 8
               Padding = padding
               YOffset1 = -2
               YOffset2 = 0 }
+        let info = { info with PageWidth = (cols + 10) * (Doc.measure info "a") }
+        Doc.create info
 
     let mutable commandDoc = Doc.create logDoc.LayoutInfo
 
@@ -298,7 +300,7 @@ and Repl() as this =
     let messageHook msg =
         match msg with
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
-        | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.Ja 80 msg)
+        | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.Ja cols msg)
     
     let editorGetTextCoroutineStarter (mm : memory_manager) (argv : value array) =
         let e = to_obj argv.[0] :?> Editor
@@ -643,17 +645,21 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     let hScroll = new HScrollBar()
     let contextMenu = new ContextMenuStrip()
 
-    let cols = 200
+    let cols = 100
 
     let mutable state = EditorState.Idle
     let mutable highlightingState = EditorHighlightingState.EHSdone
     let mutable lastlyHighlightingInitiatedContentId = -1
     let mutable hasCaret = false
-    let undoTree : UndoTree<Doc> = UndoTree.Create(Doc.createFromString (DocLayoutInfo.Default (20 / 2 * cols) 20) (match textFileHandle with Some handle -> handle.LatestText | None -> ""))
+    let undoTree : UndoTree<Doc> =
+        let info = DocLayoutInfo.Default 1000 20
+        let info = { info with PageWidth = cols * (Doc.measure info "a") }
+        let doc = Doc.createFromString info (match textFileHandle with Some handle -> handle.LatestText | None -> "")
+        UndoTree.Create(doc)
     let mutable lastlySavedRevision = 0
     let mutable topRowIndex = 0
     let mutable xOffset = 0
-    let mutable wheel_accu = 0
+    let mutable wheelAccu = 0
     let mutable caretXPos = 0
     let mutable textFileHandle = textFileHandle
     let mutable latestCommitDate = DateTime.MinValue
@@ -941,7 +947,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             
             // right boundary of page
             if drawPageBoundary then
-                let x = linenoWidth + leftMargin + doc.LayoutInfo.FontSize / 2 * cols
+                let x = linenoWidth + leftMargin + doc.LayoutInfo.PageWidth
                 g.DrawLine(Pens.LightGray, x, clientRectangle.Top, x, clientRectangle.Bottom)
 
             buffer.Render()
@@ -1086,13 +1092,13 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             upd false
             repl.InitiateHighlighting(this)
         else
-            wheel_accu <- wheel_accu + ev.Delta
+            wheelAccu <- wheelAccu + ev.Delta
             let scroll =
-                if wheel_accu > 0 then
-                    wheel_accu / 120
+                if wheelAccu > 0 then
+                    wheelAccu / 120
                 else
-                    -((-wheel_accu) / 120)
-            wheel_accu <- wheel_accu - 120 * scroll
+                    -((-wheelAccu) / 120)
+            wheelAccu <- wheelAccu - 120 * scroll
             topRowIndex <- topRowIndex - 3 * scroll
             upd false
         

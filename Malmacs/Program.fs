@@ -4,7 +4,6 @@ open System.IO
 open System.Diagnostics
 open System.Windows.Forms
 open System.Runtime.InteropServices
-open System.Reflection
 
 [<DllImport("user32.dll")>]
 extern bool SetProcessDPIAware()
