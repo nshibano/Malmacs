@@ -784,7 +784,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             let li = undoTree.Get.LayoutInfo
             undoTree.Undo()
             undoTree.Amend(Doc.changeLayout li undoTree.Get)
-            undoTree.Amend(Doc.clearColor undoTree.Get)
             resetCaretXPos()
             upd true
         else beep()
@@ -795,7 +794,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             let li = undoTree.Get.LayoutInfo
             undoTree.Redo()
             undoTree.Amend(Doc.changeLayout li undoTree.Get)
-            undoTree.Amend(Doc.clearColor undoTree.Get)
             resetCaretXPos()
             upd true
         else beep()
