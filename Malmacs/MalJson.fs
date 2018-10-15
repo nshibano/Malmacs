@@ -306,3 +306,27 @@ type private Parser(s : string) =
         with :? IndexOutOfRangeException -> raise UnexpectedEof
 
 let parse (s : string) = Parser(s).Parse()
+
+let private invalidOperation() = raise (InvalidOperationException())
+
+let rec find (json : json) (path : string list) =
+    match json, path with
+    | Jobject fields, hd :: tl -> find (snd (Array.find (fun pair -> fst pair = hd) fields)) tl
+    | _, [] -> json
+    | _ -> invalidOperation()
+
+let toInt (json : json) =
+    match json with
+    | Jnumber s -> int s
+    | _ -> invalidOperation()
+
+let toString (json : json) =
+    match json with
+    | Jstring s -> s
+    | _ -> invalidOperation()
+
+let toBool (json : json) =
+    match json with
+    | Jtrue -> true
+    | Jfalse -> false
+    | _ -> invalidOperation()
