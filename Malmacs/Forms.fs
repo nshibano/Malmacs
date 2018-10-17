@@ -487,12 +487,15 @@ and Repl() as this =
                     Some (s, rangeOfLocation loc))
 
         interp.MessageHook <- messageHook
-        let names =
+        let paths =
             try MalJson.toStringArray (MalJson.find Common.config ["init"])
             with _ -> [||]
-        for name in names do
+        for path in paths do
             try 
-                let path = Path.Combine(Common.exeDir, name)
+                let path =
+                    if Path.IsPathRooted(path)
+                    then path
+                    else Path.Combine(Common.exeDir, path)
                 let src = File.ReadAllText(path)
                 run src
             with _ -> ()
