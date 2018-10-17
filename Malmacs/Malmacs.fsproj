@@ -74,12 +74,11 @@
     <Content Include="packages.config" />
     <EmbeddedResource Include="TextFileIcon.ico" />
     <EmbeddedResource Include="PlayIcon.ico" />
+    <None Include="Mal\init.mal" />
     <Content Include="Malmacs.config.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="Mal\init.mal">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <None Include="Malmacs.config.Release.json" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Core">

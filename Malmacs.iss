@@ -28,16 +28,16 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "Malmacs\bin\Release\Malmacs.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\Malmacs.config.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Malmacs\bin\Release\Malmacs.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FSharp.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\FsMiniMAL.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\Mal\init.mal"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Malmacs\bin\Release\Malmacs.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Microsoft.WindowsAPICodePack.Shell.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\System.Collections.Immutable.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\System.ValueTuple.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\bin\Release\Ude.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "Malmacs\Malmacs.config.Release.json"; DestDir: "{app}"; DestName: "Malmacs.config.json";Flags: ignoreversion
+Source: "Malmacs\Mal\init.mal"; DestDir: "{app}\Mal"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
