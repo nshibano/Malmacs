@@ -68,6 +68,8 @@
     <Compile Include="Interpreter.fs" />
     <Compile Include="MalCompare.fs" />
     <Compile Include="Top.fs" />
+    <None Include="Lexer.fsl" />
+    <None Include="Parser.fsy" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Core">
