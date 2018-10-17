@@ -482,8 +482,8 @@ module Doc =
             let rowString = String(Array.map (fun (x : Char_ColorInfo) -> x.Char) ary)
             let colors = Array.map (fun (x : Char_ColorInfo) -> x.ColorInfo) ary
             let isEol =
-                0 < scanStart + charPos - 1 &&
-                let c = (charAt (scanStart + charPos - 1)).Char
+                rowString.Length > 0 &&
+                let c = rowString.[rowString.Length - 1]
                 c = '\r' || c = '\n'
 
             let row =
