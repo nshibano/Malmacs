@@ -357,7 +357,7 @@ and Repl() as this =
                 while state = 0 && Environment.TickCount - timestampAtStart < slice do
                     if i < doc.RowTree.Count then
                         let row, rowRange = Doc.getRow doc i
-                        let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.Begin + j))
+                        let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.Rbegin + j))
                         if colors <> row.Colors then
                             accu <- accu.ReplaceAt(i, { row with Colors = colors })
                         i <- i + 1
@@ -384,7 +384,7 @@ and Repl() as this =
 
         let interp = FsMiniMAL.Top.createInterpreter()
 
-        for ty in [| typeof<Editor>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
+        for ty in [| typeof<Editor>; typeof<Range>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
             interp.RegisterAbstractType(ty.Name.ToLowerInvariant(), ty)
 
         interp.RegisterFsharpTypes([|
@@ -443,6 +443,9 @@ and Repl() as this =
             e.EditorText <- s))
         interp.Fun("editorInitiateHighlighting", (fun mm (e : Editor) -> this.InitiateHighlighting(e)))
         interp.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter interp), interp.Typeof<Editor -> ColorInfo array -> unit>())
+        interp.Fun("editorGetLineRange", (fun mm (e : Editor) i ->
+            try Doc.getLineRange e.Doc i
+            with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =
@@ -820,6 +823,12 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         let key = ev.KeyData
         match key with
         | Keys.Enter ->
+            let doc = undoTree.Get
+            let mutable rowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.CaretPos
+            while rowIndex - 1 >= 0 &&
+                  let prevRow, _ = Doc.getRow doc (rowIndex - 1)
+                  not prevRow.IsEndOfLine do rowIndex <- rowIndex - 1
+
             let s = match getLineEnding() with CRLF -> "\r\n" | LF -> "\n" | CR -> "\r"
             input_upd true s
             ev.Handled <- true
