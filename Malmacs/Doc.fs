@@ -122,10 +122,17 @@ type Doc =
     member this.RowCount = this.RowTree.Count + (if this.HasTrailingEmptyLine then 1 else 0)
     member this.LineCount = this.RowTree.RootMeasure.EndOfLineCount + 1
 
+type Char_ColorInfo =
+    struct
+        val mutable Char : char
+        val mutable ColorInfo : ColorInfo
+        new(char : Char, colorInfo : ColorInfo) = { Char = char; ColorInfo = colorInfo }
+    end
+    
 type Buf() =
     let mutable start = 0
     let mutable count = 0
-    let mutable storage : char array = [||]
+    let mutable storage : Char_ColorInfo array = [||]
 
     member this.Count = count
     member this.Item with get i = storage.[start + i]
@@ -134,29 +141,35 @@ type Buf() =
         start <- start + n
         count <- count - n
 
-    member this.AddRange(s : string) =
+    member this.AddRange(s : string, colors : ColorInfo array) =
         if start + count + s.Length <= storage.Length then
             for i = 0 to s.Length - 1 do
-                storage.[start + count + i] <- s.[i]
+                let ofs = start + count + i
+                storage.[ofs].Char <- s.[i]
+                storage.[ofs].ColorInfo <- colors.[i]
             count <- count + s.Length
         else
             let newCount = count + s.Length
             let newCapacity = FsMiniMAL.Misc.find_next_capacity_exn Int32.MaxValue newCount
-            let newStorage = Array.zeroCreate<char> newCapacity
+            let newStorage = Array.zeroCreate<Char_ColorInfo> newCapacity
             Array.blit storage start newStorage 0 count
             for i = 0 to s.Length - 1 do
-                newStorage.[count + i] <- s.[i]
+                let ofs = count + i
+                newStorage.[ofs].Char <- s.[i]
+                newStorage.[ofs].ColorInfo <- colors.[i]
             start <- 0
             count <- newCount
             storage <- newStorage
     
-    member this.ReplaceRange(replBegin : int, replCount : int, replacement : string) =
+    member this.ReplaceRange(replBegin : int, replCount : int, replacement : string, colorInfo : ColorInfo) =
         let newCount = count - replCount + replacement.Length
-        let newStorage = Array.zeroCreate<char> newCount
+        let newStorage = Array.zeroCreate<Char_ColorInfo> newCount
         for i = 0 to replBegin - 1 do
             newStorage.[i] <- storage.[start + i]
         for i = 0 to replacement.Length - 1 do
-            newStorage.[replBegin + i] <- replacement.[i]
+            let ofs = replBegin + i
+            newStorage.[ofs].Char <- replacement.[i]
+            newStorage.[ofs].ColorInfo <- colorInfo
         for i = 0 to count - replBegin - replCount - 1 do
             newStorage.[replBegin + replacement.Length + i] <- storage.[start + replBegin + replCount + i]
         start <- 0
@@ -380,9 +393,18 @@ module Doc =
         
         let buf = Buf()
         for rowIndex = deconstrRowIndexBegin to deconstrRowIndexEnd - 1 do
-            buf.AddRange((fst (getRow doc rowIndex)).String)
+            let row = fst (getRow doc rowIndex)
+            buf.AddRange(row.String, row.Colors)
         
-        buf.ReplaceRange((charRange.Begin - head.RootMeasure.CharCount), (charRange.Length), replacement)
+        let ci =
+            let i = charRange.Begin - 1
+            if 0 <= i && i < doc.CharCount then
+                let rowIndex = getRowIndexFromCharPos doc i
+                let row, rowRange = getRow doc rowIndex
+                row.Colors.[i - rowRange.Begin]
+            else ColorInfo_Default
+
+        buf.ReplaceRange((charRange.Begin - head.RootMeasure.CharCount), (charRange.Length), replacement, ci)
         let charCount = head.RootMeasure.CharCount + buf.Count + tail.RootMeasure.CharCount
 
         let rec rowTree_charAt_loop (tree : RowTree) (node : RowTreeNode) i =
@@ -392,7 +414,8 @@ module Doc =
                 if i < leftCharCount then
                     rowTree_charAt_loop tree left i
                 elif i < leftCharCount + value.String.Length then
-                    value.String.[i - leftCharCount]
+                    let ofs = i - leftCharCount
+                    Char_ColorInfo(value.String.[ofs], value.Colors.[ofs])
                 else
                     rowTree_charAt_loop tree right (i - leftCharCount - value.String.Length)
             | Nil -> dontcare()
@@ -430,9 +453,9 @@ module Doc =
             while cont && scanStart + charPos < charCount do
 
                 let symbol =
-                    let c0 = charAt (scanStart + charPos)
+                    let c0 = (charAt (scanStart + charPos)).Char
                     if (c0 = '\r' || Char.IsHighSurrogate(c0)) && scanStart + charPos + 1 < charCount then
-                        let c1 = charAt (scanStart + charPos + 1)
+                        let c1 = (charAt (scanStart + charPos + 1)).Char
                         if (c0 = '\r' && c1 = '\n') || Char.IsSurrogatePair(c0, c1) then
                             String([| c0; c1 |])
                         else String(c0, 1)
@@ -455,23 +478,25 @@ module Doc =
             charPoss.Add(charPos)
             xOffsets.Add(xOffset)
 
-            let rowString = String(Array.init (charPoss.[charPoss.Count - 1] - charPoss.[0]) (fun i -> charAt (scanStart + i)))
-            let symbolCount = charPoss.Count - 1
+            let ary = Array.init (charPoss.[charPoss.Count - 1] - charPoss.[0]) (fun i -> charAt (scanStart + i))
+            let rowString = String(Array.map (fun (x : Char_ColorInfo) -> x.Char) ary)
+            let colors = Array.map (fun (x : Char_ColorInfo) -> x.ColorInfo) ary
             let isEol =
                 0 < scanStart + charPos - 1 &&
-                let c = charAt (scanStart + charPos - 1)
+                let c = (charAt (scanStart + charPos - 1)).Char
                 c = '\r' || c = '\n'
 
             let row =
                 { String = rowString
-                  Colors = Array.create rowString.Length ColorInfo_Default
+                  Colors = colors
                   CharOffsets = charPoss.ToArray()
                   XOffsets = xOffsets.ToArray()
                   IsEndOfLine = isEol }
             head <- head.Add(row)
 
             while buf.Count < rowString.Length do
-                buf.AddRange(tail.[0].String)
+                let tail0 = tail.[0]
+                buf.AddRange(tail0.String, tail0.Colors)
                 tail <- tail.RemoveAt(0)
                 
             buf.RemoveHead(rowString.Length)
