@@ -129,7 +129,7 @@ type TryOpenPathResult =
 let tryOpenPath (path : string) =
     let mutable fd = null : FileStream
     try
-        fd <- new FileStream(path, FileMode.Open, FileAccess.ReadWrite)
+        fd <- new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read)
         if fd.Length > int64 maximumFileSize then raise (Exception("File is too large."))
         let len = int fd.Length
         let buf = Array.zeroCreate<byte> len
@@ -173,7 +173,7 @@ let tryOpen (oldHandle : TextFileHandle option)  : TryOpenResult =
         let mutable fd = null : FileStream
         try
             let path = dialog.FileName
-            fd <- new FileStream(path, FileMode.Open, FileAccess.ReadWrite)
+            fd <- new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read)
             if fd.Length > int64 maximumFileSize then raise (Exception("File is too large."))
             let len = int fd.Length
             let buf = Array.zeroCreate<byte> len
@@ -244,7 +244,7 @@ let trySaveAs (oldHandle : TextFileHandle option) (newText : string) =
             else path
         let mutable fd = null : FileStream
         try
-           fd <- new FileStream(dialog.FileName, FileMode.OpenOrCreate, FileAccess.ReadWrite)
+           fd <- new FileStream(dialog.FileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read)
            fd.Seek(0L, SeekOrigin.Begin) |> ignore
            fd.Write(bytes, 0, bytes.Length)
            fd.SetLength(int64 bytes.Length)

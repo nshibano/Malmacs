@@ -490,13 +490,14 @@ and Repl() as this =
         let paths =
             try MalJson.toStringArray (MalJson.find Common.config ["init"])
             with _ -> [||]
+
         for path in paths do
             try 
                 let path =
                     if Path.IsPathRooted(path)
                     then path
                     else Path.Combine(Common.exeDir, path)
-                let src = File.ReadAllText(path)
+                let src = readAllTextFromLockedFile path
                 run src
             with _ -> ()
         mal <- Some (interp, malproc)

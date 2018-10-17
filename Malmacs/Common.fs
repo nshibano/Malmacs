@@ -12,10 +12,15 @@ open System.Text
 open System.IO
 open System.Reflection
 
+let readAllTextFromLockedFile path =
+    use fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+    use r = new StreamReader(fs)
+    r.ReadToEnd()
+
 let exeDir = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)
 
 let config =
-    try MalJson.parse (File.ReadAllText(Path.Combine(exeDir, "Malmacs.config.json")))
+    try MalJson.parse (readAllTextFromLockedFile (Path.Combine(exeDir, "Malmacs.config.json")))
     with _ -> MalJson.Jnull
 
 exception DontCareException
