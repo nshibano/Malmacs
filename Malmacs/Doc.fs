@@ -84,15 +84,15 @@ type RowTree = MeasuredTreeList<Row, RowTreeInfo>
 type RowTreeNode = MeasuredTreeListNode<Row, RowTreeInfo>
 
 type Range =
-    { Rbegin : int
-      Rend : int }
+    { rBegin : int
+      rEnd : int }
     
-    member r.Length = r.Rend - r.Rbegin
-    member r.Contains x = r.Rbegin <= x && x < r.Rend
+    member r.Length = r.rEnd - r.rBegin
+    member r.Contains x = r.rBegin <= x && x < r.rEnd
     member r.Clip x =
         if r.Length = 0 then dontcare()
-        if x < r.Rbegin then r.Rbegin
-        elif r.Rend <= x then r.Rend - 1
+        if x < r.rBegin then r.rBegin
+        elif r.rEnd <= x then r.rEnd - 1
         else x
 
 type Selection =
@@ -107,9 +107,9 @@ type Selection =
 
     member x.ToRange() =
         if x.CaretPos < x.AnchorPos then
-            { Rbegin = x.CaretPos; Rend = x.AnchorPos }
+            { rBegin = x.CaretPos; rEnd = x.AnchorPos }
         else
-            { Rbegin = x.AnchorPos; Rend = x.CaretPos }
+            { rBegin = x.AnchorPos; rEnd = x.CaretPos }
 
 type Doc =
     { LayoutInfo : DocLayoutInfo
@@ -312,10 +312,10 @@ module Doc =
         if 0 <= rowIndex && rowIndex < doc.RowTree.Count then
             let bgn = doc.RowTree.MeasureRange(0, rowIndex).CharCount
             let row = doc.RowTree.[rowIndex]
-            row, { Rbegin = bgn; Rend = bgn + row.String.Length }
+            row, { rBegin = bgn; rEnd = bgn + row.String.Length }
         elif rowIndex = doc.RowTree.Count && doc.HasTrailingEmptyLine then
             let bgn = doc.RowTree.RootMeasure.CharCount
-            Row_empty, { Rbegin = bgn; Rend = bgn }
+            Row_empty, { rBegin = bgn; rEnd = bgn }
         else raise (IndexOutOfRangeException())
 
     let getRowIndexFromCharPos (doc : Doc) charPos =
@@ -359,15 +359,15 @@ module Doc =
                 else
                     let rowIndex = getRowIndexOfIthEolRowLoop doc 0 doc.RowTree.Root (lineIndex - 1)
                     let _, rowRange = getRow doc rowIndex
-                    rowRange.Rend
+                    rowRange.rEnd
             let ed =
                 if lineIndex = doc.LineCount - 1 then
                     doc.CharCount
                 else
                     let rowIndex = getRowIndexOfIthEolRowLoop doc 0 doc.RowTree.Root lineIndex
                     let _, rowRange = getRow doc rowIndex
-                    rowRange.Rend
-            { Rbegin = bgn; Rend = ed }
+                    rowRange.rEnd
+            { rBegin = bgn; rEnd = ed }
         else raise (IndexOutOfRangeException())
     
     let validateCharPos (doc : Doc) (rightNotLeft : bool) charPos =
@@ -377,8 +377,8 @@ module Doc =
             let rowIndex = getRowIndexFromCharPos doc charPos
             let row, rowRange = getRow doc rowIndex
             let binchop = if rightNotLeft then binchopRight else binchopLeft
-            let i = binchop row.CharOffsets (charPos - rowRange.Rbegin)
-            rowRange.Rbegin + row.CharOffsets.[i]
+            let i = binchop row.CharOffsets (charPos - rowRange.rBegin)
+            rowRange.rBegin + row.CharOffsets.[i]
 
     let setPos (doc : Doc) pos =
         { doc with Selection = { AnchorPos = pos; CaretPos = pos }}
@@ -395,7 +395,7 @@ module Doc =
         if 0 <= charIndex && charIndex < doc.CharCount then
             let rowIndex = getRowIndexFromCharPos doc charIndex
             let row, rowRange = getRow doc rowIndex
-            row.Colors.[charIndex - rowRange.Rbegin]
+            row.Colors.[charIndex - rowRange.rBegin]
         else raise (IndexOutOfRangeException())
     
     let replace (doc : Doc) (replacement : string) =
@@ -403,18 +403,18 @@ module Doc =
         let charRange = doc.Selection.ToRange()
 
         let deconsrBeginCharPos =
-            if (0 < charRange.Rbegin &&
-                let c = getChar doc (charRange.Rbegin - 1)
+            if (0 < charRange.rBegin &&
+                let c = getChar doc (charRange.rBegin - 1)
                 c = '\r' || Char.IsHighSurrogate(c))
-            then charRange.Rbegin - 1
-            else charRange.Rbegin
+            then charRange.rBegin - 1
+            else charRange.rBegin
         
         let deconstrEndCharPos =
-            if (charRange.Rend < doc.CharCount &&
-                let c = getChar doc charRange.Rend
+            if (charRange.rEnd < doc.CharCount &&
+                let c = getChar doc charRange.rEnd
                 c = '\n' || Char.IsLowSurrogate(c))
-            then charRange.Rend + 1
-            else charRange.Rend
+            then charRange.rEnd + 1
+            else charRange.rEnd
         
         let deconstrRowIndexBegin = getRowIndexFromCharPos doc deconsrBeginCharPos
         let deconstrRowIndexEnd = getRowIndexFromCharPos doc deconstrEndCharPos + 1
@@ -428,14 +428,14 @@ module Doc =
             buf.AddRange(row.String, row.Colors)
         
         let ci =
-            let i = charRange.Rbegin - 1
+            let i = charRange.rBegin - 1
             if 0 <= i && i < doc.CharCount then
                 let rowIndex = getRowIndexFromCharPos doc i
                 let row, rowRange = getRow doc rowIndex
-                row.Colors.[i - rowRange.Rbegin]
+                row.Colors.[i - rowRange.rBegin]
             else ColorInfo_Default
 
-        buf.ReplaceRange((charRange.Rbegin - head.RootMeasure.CharCount), (charRange.Length), replacement, ci)
+        buf.ReplaceRange((charRange.rBegin - head.RootMeasure.CharCount), (charRange.Length), replacement, ci)
         let charCount = head.RootMeasure.CharCount + buf.Count + tail.RootMeasure.CharCount
 
         let rec rowTree_charAt_loop (tree : RowTree) (node : RowTreeNode) i =
@@ -533,7 +533,7 @@ module Doc =
             buf.RemoveHead(rowString.Length)
 
         let doc = { doc with RowTree = head.AddRange(tail); ContentId = contentIdNew() }
-        let newPos = validateCharPos doc true (charRange.Rbegin + replacement.Length)
+        let newPos = validateCharPos doc true (charRange.rBegin + replacement.Length)
         { doc with Selection = { AnchorPos = newPos; CaretPos = newPos }}
     
     let createFromString info (s : string) = replace (create info) s
@@ -541,7 +541,7 @@ module Doc =
     let getSymbolFromCharPos (doc : Doc) (charPos : int) =
         let rowIndex = getRowIndexFromCharPos doc charPos
         let row, rowRange = getRow doc rowIndex
-        let symbolIndexInRow = binchopLeft row.CharOffsets (charPos - rowRange.Rbegin)
+        let symbolIndexInRow = binchopLeft row.CharOffsets (charPos - rowRange.rBegin)
         let ofs = row.CharOffsets.[symbolIndexInRow]
         let len = row.CharOffsets.[symbolIndexInRow + 1] - row.CharOffsets.[symbolIndexInRow]
         row.String.Substring(ofs, len)
@@ -549,7 +549,7 @@ module Doc =
     let getSelectedString (doc : Doc) =
         let range = doc.Selection.ToRange()
         let sb = StringBuilder(range.Length)
-        for i = range.Rbegin to range.Rend - 1 do
+        for i = range.rBegin to range.rEnd - 1 do
             sb.Add(getChar doc i)
         sb.ToString()
 
@@ -559,25 +559,25 @@ module Doc =
         let rowIndex = getRowIndexFromCharPos doc charPos
         let y = doc.LayoutInfo.LineHeight * rowIndex
         let row, rowRange = getRow doc rowIndex
-        let symbolIndex = binchopLeft row.CharOffsets (charPos - rowRange.Rbegin)
+        let symbolIndex = binchopLeft row.CharOffsets (charPos - rowRange.rBegin)
         let x = row.XOffsets.[symbolIndex]
         Point(x, y)
 
     let getCaretPoint (doc : Doc) = getPointFromCharPos doc doc.Selection.CaretPos
 
     let getCharIndexFromPoint (doc : Doc) (p : Point) =
-        let rowIndex = { Rbegin = 0; Rend = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
+        let rowIndex = { rBegin = 0; rEnd = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
         let row, rowRange = getRow doc rowIndex
         let i = binchopLeft row.XOffsets p.X
         if i = -1 || i = row.XOffsets.Length - 1 then
             None
         else
-            let charIndex =rowRange.Rbegin + row.CharOffsets.[i]
+            let charIndex =rowRange.rBegin + row.CharOffsets.[i]
             if not (0 <= charIndex && charIndex < doc.CharCount) then dontcare()
             Some charIndex
     
     let getCharPosFromPoint (doc : Doc) (p : Point) =
-        let rowIndex = { Rbegin = 0; Rend = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
+        let rowIndex = { rBegin = 0; rEnd = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
         let row, rowRange = getRow doc rowIndex
         let symbolPosInRow =
             let i = binchopLeft row.XOffsets p.X
@@ -598,11 +598,11 @@ module Doc =
                 symbolPosInRow - 1
             else symbolPosInRow
         
-        rowRange.Rbegin + row.CharOffsets.[symbolPosInRow]
+        rowRange.rBegin + row.CharOffsets.[symbolPosInRow]
     
     let getWordSelection (doc : Doc) (p : Point) =
         if doc.CharCount > 0 then
-            let rowIndex = { Rbegin = 0; Rend = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
+            let rowIndex = { rBegin = 0; rEnd = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
             let row, rowRange = getRow doc rowIndex
             if rowRange.Length > 0 then
                 let symbolPosInRow =
@@ -618,11 +618,11 @@ module Doc =
                     let mutable j = symbolIndexInRow
                     while j + 1 < row.SymbolCount && (symbolIsSpaceOrTab (row.GetSymbol(j + 1)) = targetIsWhitespace) do
                         j <- j + 1
-                    { AnchorPos = rowRange.Rbegin + row.CharOffsets.[i]; CaretPos = rowRange.Rbegin + row.CharOffsets.[j + 1] }
+                    { AnchorPos = rowRange.rBegin + row.CharOffsets.[i]; CaretPos = rowRange.rBegin + row.CharOffsets.[j + 1] }
                 else
-                    let pos = rowRange.Rbegin + row.CharOffsets.[symbolIndexInRow]
+                    let pos = rowRange.rBegin + row.CharOffsets.[symbolIndexInRow]
                     { AnchorPos = pos; CaretPos = pos; }
-            else { CaretPos = rowRange.Rbegin; AnchorPos = rowRange.Rbegin }
+            else { CaretPos = rowRange.rBegin; AnchorPos = rowRange.rBegin }
         else { CaretPos = 0; AnchorPos = 0 }
     
     let changeLayout (layoutInfo : DocLayoutInfo) (doc : Doc) =
@@ -727,7 +727,7 @@ module Doc =
                 let w = row.XOffsets.[i + 1] - row.XOffsets.[i]
                 let range = doc.Selection.ToRange()
                 let rectXOfs = -1
-                if range.Contains (rowRange.Rbegin + row.CharOffsets.[i]) then
+                if range.Contains (rowRange.rBegin + row.CharOffsets.[i]) then
                     let mutable rect = Win32.RECT(left = x + rectXOfs, top = y, right = x + w, bottom = y + li.LineHeight)
                     Win32.FillRect(hdc, &rect, selected_brush) |> ignore
                 elif Option.isSome colorInfo.ciBackColor then

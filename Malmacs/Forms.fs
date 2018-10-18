@@ -357,7 +357,7 @@ and Repl() as this =
                 while state = 0 && Environment.TickCount - timestampAtStart < slice do
                     if i < doc.RowTree.Count then
                         let row, rowRange = Doc.getRow doc i
-                        let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.Rbegin + j))
+                        let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.rBegin + j))
                         if colors <> row.Colors then
                             accu <- accu.ReplaceAt(i, { row with Colors = colors })
                         i <- i + 1
@@ -384,10 +384,11 @@ and Repl() as this =
 
         let interp = FsMiniMAL.Top.createInterpreter()
 
-        for ty in [| typeof<Editor>; typeof<Range>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
+        for ty in [| typeof<Editor>; typeof<Regex>; typeof<Match>; typeof<Group>; typeof<Capture>; typeof<Color> |] do
             interp.RegisterAbstractType(ty.Name.ToLowerInvariant(), ty)
 
         interp.RegisterFsharpTypes([|
+            ("range", typeof<Range>)
             ("colorInfo", typeof<ColorInfo>)
             ("message", typeof<Message>)
             ("json", typeof<MalJson.json>) |])
