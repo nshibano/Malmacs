@@ -26,7 +26,7 @@ and EditorHighlightingState =
 
 and Message =
     | MhighlightingRequired of Editor
-    | MkeyPress of Editor * KeyDown
+    | MkeyDown of Editor * KeyDown
 
 and MalThread =
     | MTchunk of string
@@ -260,6 +260,11 @@ and Repl() as this =
 
     let run (src : string) = chunkQueue.Add(src)
     
+    let editorKeyDown (e : Editor) (kd : KeyDown) =
+        match mal with
+        | Some _ -> messageQueue.Add(MkeyDown (e, kd))
+        | None -> e.DefaultKeyDown(kd)
+
     let point_sub (a : Point) (b : Point) = Point(a.X - b.X, a.Y - b.Y)
 
     let mouse_down (ev : MouseEventArgs) =
@@ -466,6 +471,7 @@ and Repl() as this =
         interp.Fun("editorGetLineRange", (fun mm (e : Editor) i ->
             try Doc.getLineRange e.Doc i
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))
+        interp.Fun("editorDefaultKeyDown", (fun mm (e : Editor) (kd : KeyDown) -> e.DefaultKeyDown(kd)))
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =
@@ -638,6 +644,7 @@ and Repl() as this =
         bootUpd()
     
     member this.Editors = editors
+    member this.EditorKeyDown e kd = editorKeyDown e kd
     member this.SelectedEditor with get() = selectedEditor and set x = selectedEditor <- x
     member this.NewEditor() = new_editor()
     member this.OpenFileWithNewEditor() = open_file_with_new_editor()
@@ -1222,7 +1229,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
 
         textArea.KeyDown.Add(fun ev ->
             match KeyDown.CreateFromKeyData(ev.KeyData) with
-            | Some kd -> defaultKeyDown kd
+            | Some kd -> repl.EditorKeyDown this kd
             | None -> ()
             ev.Handled <- true)
         textArea.KeyPress.Add(keyPress)

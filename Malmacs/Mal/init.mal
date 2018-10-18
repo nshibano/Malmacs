@@ -116,7 +116,8 @@ malproc <-
             for i = 0 to arrayLength highlightingKeywords - 1 do
                 highlightKeyword highlightingKeywords.[i] ciHighlighted s accu;
             editorSetColor editor accu
-        end);
+        end
+    | MkeyDown (e, kd) -> editorDefaultKeyDown e kd);
 
 fun initiateHighlighting() = arrayIter editorInitiateHighlighting (getEditors());
 
