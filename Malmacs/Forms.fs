@@ -24,9 +24,12 @@ and EditorHighlightingState =
     | EHShighlighting // highlighting thread is running
     | EHSneedRestart // highlighting thread is running, but document has been modified after start, so that restarting highlighting thread is required after the highlighting thread does sei().
 
+and Key =
+    | Kenter
+
 and Message =
     | MhighlightingRequired of Editor
-    | MkeyPress of Editor * int
+    | MkeyPress of Editor * Key
 
 and MalThread =
     | MTchunk of string
@@ -406,6 +409,7 @@ and Repl() as this =
             ("range", typeof<Range>)
             ("colorInfo", typeof<ColorInfo>)
             ("message", typeof<Message>)
+            ("key", typeof<Key>)
             ("json", typeof<MalJson.json>) |])
         interp.Do("var malproc : message -> unit = ignore")
     
