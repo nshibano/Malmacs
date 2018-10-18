@@ -453,8 +453,8 @@ and Repl() as this =
             | None -> ""))
 
         interp.Fun("editorGetTextLength", fun mm (e : Editor) -> e.Doc.CharCount)
-        interp.Set("editorGetTextFromCharRange", Vcoroutine (2, editorGetTextFromCharRangeCoroutineStarter interp), interp.Typeof<Editor -> Range -> string>())
-        interp.Do("fun editorGetText (e : editor) = editorGetTextFromCharRange e { rBegin = 0, rEnd = editorGetTextLength e }")
+        interp.Set("editorGetTextFromRange", Vcoroutine (2, editorGetTextFromCharRangeCoroutineStarter interp), interp.Typeof<Editor -> Range -> string>())
+        interp.Do("fun editorGetText (e : editor) = editorGetTextFromRange e { rBegin = 0, rEnd = editorGetTextLength e }")
 
         interp.Fun("editorSetText", (fun mm (e : Editor) (s : string) ->
             malEnsureEditorIsOk mm e
