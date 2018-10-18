@@ -468,6 +468,9 @@ and Repl() as this =
             e.EditorText <- s))
         interp.Fun("editorInitiateHighlighting", (fun mm (e : Editor) -> this.InitiateHighlighting(e)))
         interp.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter interp), interp.Typeof<Editor -> ColorInfo array -> unit>())
+        interp.Fun("editorGetLineIndexFromCharPos", (fun mm (e : Editor) pos ->
+            try Doc.getLineIndexFromCharPos e.Doc pos
+            with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))
         interp.Fun("editorGetLineRange", (fun mm (e : Editor) i ->
             try Doc.getLineRange e.Doc i
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))

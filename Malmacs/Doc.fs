@@ -350,7 +350,25 @@ module Doc =
             else
                 getRowIndexOfIthEolRowLoop doc (upleftRowCount + left.Count + 1) right (i - leftEolCount - (if value.IsEndOfLine then 1 else 0))
         | Nil -> dontcare()
-        
+
+    let getLineIndexFromCharPos (doc : Doc) charPos =
+        if 0 <= charPos && charPos < doc.CharCount then
+            let rec loop upleftEolCount node pos =
+                match node with
+                | Node (Left = left; Value = value; Right = right) ->
+                    let leftMeasure = doc.RowTree.MeasureOf(left)
+                    if pos < leftMeasure.CharCount then
+                        loop upleftEolCount left pos
+                    elif pos < leftMeasure.CharCount + value.String.Length then
+                        upleftEolCount + leftMeasure.EndOfLineCount
+                    else
+                        loop (upleftEolCount + leftMeasure.EndOfLineCount + (if value.IsEndOfLine then 1 else 0)) right (pos - leftMeasure.CharCount - value.String.Length)
+                | Nil -> dontcare()
+            loop 0 doc.RowTree.Root charPos
+        elif charPos = doc.CharCount then
+            doc.RowTree.RootMeasure.EndOfLineCount
+        else raise (IndexOutOfRangeException()) 
+    
     let getLineRange (doc : Doc) lineIndex =
         if lineIndex < doc.LineCount then
             let bgn =
