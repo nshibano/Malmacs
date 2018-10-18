@@ -202,6 +202,14 @@ let tyenv_std, alloc_std, genv_std =
                 sb.Append(to_string ary.storage.[i]) |> ignore
             of_string mm (sb.ToString()))
 
+    add_func "stringSub" (arrow3 ty_string ty_int ty_int ty_string) 3
+        (fun mm argv ->
+            let s = to_string argv.[0]
+            let start = to_int argv.[1]
+            let count = to_int argv.[2]
+            try of_string mm (s.Substring(start, count))
+            with _ -> mal_raise_Invalid_argument())
+
     add_func "stringStartWith" (Tarrow ("s", ty_string, Tarrow ("starting", ty_string, ty_bool))) 2
         (fun (mm : memory_manager) (argv : value array) ->
             let s = to_string argv.[0]
