@@ -452,6 +452,7 @@ and Repl() as this =
             match this.SelectedEditor with
             | Some e -> e
             | None -> mal_failwith mm "There is no selected editor."))
+
         interp.Fun("getEditors", (fun mm () -> editors.ToArray()))
 
         interp.Fun("editorGetFilename", (fun mm (e : Editor) ->
@@ -477,6 +478,8 @@ and Repl() as this =
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))
         interp.Fun("editorGetSelection", (fun mm (e : Editor) -> e.Doc.Selection))
         interp.Fun("editorDefaultKeyDown", (fun mm (e : Editor) (kd : KeyDown) -> e.DefaultKeyDown(kd)))
+        interp.Fun("editorGetNewlineString", (fun mm (e : Editor) -> e.GetNewlineString()))
+        interp.Fun("editorInput", (fun mm (e : Editor) (atomic : bool) (s : string) -> e.Input atomic s))
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =
@@ -850,19 +853,13 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
 
     let getDp (p : Point) = Point(p.X - linenoWidth - leftMargin + xOffset, undoTree.Get.LayoutInfo.LineHeight * topRowIndex + p.Y)
     let getLineEnding() = match textFileHandle with None -> CRLF | Some handle -> handle.LineEnding
+    let getNewlineString() = match getLineEnding() with CRLF -> "\r\n" | LF -> "\n" | CR -> "\r"
     let getEncoding() = match textFileHandle with None -> UTF8 | Some handle -> handle.TextEncoding
 
     let defaultKeyDown (kd : KeyDown) =
         match kd with
         | { kdKey = Kenter } ->
-            let doc = undoTree.Get
-            let mutable rowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.sCaretPos
-            while rowIndex - 1 >= 0 &&
-                  let prevRow, _ = Doc.getRow doc (rowIndex - 1)
-                  not prevRow.IsEndOfLine do rowIndex <- rowIndex - 1
-
-            let s = match getLineEnding() with CRLF -> "\r\n" | LF -> "\n" | CR -> "\r"
-            input_upd true s
+            input_upd true (getNewlineString())
         | { kdKey = Kspace } -> input_upd false " "
         | { kdKey = Ktab } -> input_upd false "\t"
         | { kdKey = Kback }
@@ -1304,8 +1301,10 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     member this.LastlyHighlightingInitiatedContentId with get() = lastlyHighlightingInitiatedContentId and set x = lastlyHighlightingInitiatedContentId <- x
     member this.TextArea : OpaqueIMEControl = textArea
     member this.Doc = undoTree.Get
+    member this.Input atomic s = input_upd atomic s
     member this.Amend newDoc = undoTree.Amend(newDoc)
     member this.DefaultKeyDown e = defaultKeyDown e
+    member this.GetNewlineString() = getNewlineString()
     member this.EditorText
         with get() = Doc.getAllString undoTree.Get
         and set s =
