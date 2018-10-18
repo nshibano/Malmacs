@@ -69,6 +69,7 @@
     <Compile Include="FileHelper.fs" />
     <Compile Include="UndoTree.fs" />
     <Compile Include="MalLibs.fs" />
+    <Compile Include="Key.fs" />
     <Compile Include="Forms.fs" />
     <Compile Include="Program.fs" />
     <Content Include="packages.config" />

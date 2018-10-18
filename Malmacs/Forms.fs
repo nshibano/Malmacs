@@ -24,12 +24,9 @@ and EditorHighlightingState =
     | EHShighlighting // highlighting thread is running
     | EHSneedRestart // highlighting thread is running, but document has been modified after start, so that restarting highlighting thread is required after the highlighting thread does sei().
 
-and Key =
-    | Kenter
-
 and Message =
     | MhighlightingRequired of Editor
-    | MkeyPress of Editor * Key
+    | MkeyPress of Editor * KeyDown
 
 and MalThread =
     | MTchunk of string
@@ -410,6 +407,7 @@ and Repl() as this =
             ("colorInfo", typeof<ColorInfo>)
             ("message", typeof<Message>)
             ("key", typeof<Key>)
+            ("keyPress", typeof<KeyDown>)
             ("json", typeof<MalJson.json>) |])
         interp.Do("var malproc : message -> unit = ignore")
     
@@ -649,6 +647,7 @@ and Repl() as this =
     member this.InitiateHighlighting e = initiateHighlighting e
     member this.InitiateHighlightingIfTextChanged e = initiateHighlightingIfTextChanged e
     member this.RebootUpd() = rebootUpd()
+    member this.QueueMessage msg = messageQueue.Add(msg)
     override this.OnFormClosing(ev) =
         if ev.CloseReason <> CloseReason.ApplicationExitCall then
             this.Hide()
@@ -841,10 +840,9 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     let getLineEnding() = match textFileHandle with None -> CRLF | Some handle -> handle.LineEnding
     let getEncoding() = match textFileHandle with None -> UTF8 | Some handle -> handle.TextEncoding
 
-    let keyDown (ev : KeyEventArgs) =
-        let key = ev.KeyData
-        match key with
-        | Keys.Enter ->
+    let defaultKeyDown (kd : KeyDown) =
+        match kd with
+        | { kdKey = Kenter } ->
             let doc = undoTree.Get
             let mutable rowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.CaretPos
             while rowIndex - 1 >= 0 &&
@@ -853,46 +851,34 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
 
             let s = match getLineEnding() with CRLF -> "\r\n" | LF -> "\n" | CR -> "\r"
             input_upd true s
-            ev.Handled <- true
-        | Keys.Space
-        | CombinedKeys.Shift_Space
-        | Keys.Tab ->
-            let s =
-                if key.HasFlag(Keys.Space) then " "
-                else "\t"
-            input_upd false s
-            ev.Handled <- true
-        | Keys.Back
-        | Keys.Delete ->
+        | { kdKey = Kspace } -> input_upd false " "
+        | { kdKey = Ktab } -> input_upd false "\t"
+        | { kdKey = Kback }
+        | { kdKey = Kdelete } ->
             let atomic = undoTree.Get.Selection.Length <> 0
-            match Doc.backDelete (key = Keys.Delete) undoTree.Get with
+            match Doc.backDelete (kd.kdKey = Kdelete) undoTree.Get with
             | Some newDoc ->
                 commit newDoc atomic
             | None -> beep()
             upd true
-            ev.Handled <- true
-        | Keys.Left
-        | Keys.Right ->
-            match Doc.leftRight (key = Keys.Right) undoTree.Get with
+        | { kdKey = Kleft; kdShift = false }
+        | { kdKey = Kright; kdShift = false } ->
+            match Doc.leftRight (kd.kdKey = Kright) undoTree.Get with
             | Some newDoc -> undoTree.Amend newDoc
             | None -> beep()
             resetCaretXPos()
             upd true
-            ev.Handled <- true
-        | CombinedKeys.Shift_Left
-        | CombinedKeys.Shift_Right ->
-            match Doc.shiftLeftRight (key = CombinedKeys.Shift_Right) undoTree.Get with
+        | { kdKey = Kleft; kdShift = true }
+        | { kdKey = Kright; kdShift = true } ->
+            match Doc.shiftLeftRight (kd.kdKey = Kright) undoTree.Get with
             | Some newDoc -> undoTree.Amend(newDoc)
             | None -> beep()
             resetCaretXPos()
             upd true
-            ev.Handled <- true
-        | Keys.Up
-        | Keys.Down
-        | CombinedKeys.Shift_Up
-        | CombinedKeys.Shift_Down ->
-            let down = key.HasFlag(Keys.Down)
-            let shift = key.HasFlag(Keys.Shift)
+        | { kdKey = Kup }
+        | { kdKey = Kdown } ->
+            let down = (kd.kdKey = Kdown)
+            let shift = kd.kdShift
             let doc = undoTree.Get
             let dp = Doc.getCaretPoint doc
             let y =
@@ -915,36 +901,27 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
                 else
                     undoTree.Amend({ doc with Selection = { AnchorPos = pos; CaretPos = pos }})
             upd true
-            ev.Handled <- true
-        | CombinedKeys.Control_X ->
+        | { kdKey = Kx; kdControl = true } ->
             cut_upd()
-            ev.Handled <- true
-        | CombinedKeys.Control_C ->
+        | { kdKey = Kc; kdControl = true } ->
             copy()
-            ev.Handled <- true
-        | CombinedKeys.Control_V ->
+        | { kdKey = Kv; kdControl = true } ->
             paste_upd()
-            ev.Handled <- true
-        | CombinedKeys.Control_A ->
+        | { kdKey = Ka; kdControl = true } ->
             selectAll_upd()
-            ev.Handled <- true
-        | CombinedKeys.Control_Z ->
+        | { kdKey = Kz; kdControl = true } ->
             undoUpd()
-        | CombinedKeys.Control_Y
-        | CombinedKeys.Control_Shift_Z ->
+        | { kdKey = Ky; kdControl = true }
+        | { kdKey = Kz; kdShift = true; kdControl = true } ->
             redoUpd()
             upd true
-        | Keys.F5 ->
+        | { kdKey = Kf5 } ->
             GC.Collect()
             upd false
-            ev.Handled <- true
-        //| Keys.F6 -> failwith "boom"
-        | Keys.F9 ->
+        | { kdKey = Kf9 } ->
             repl.Show()
-            ev.Handled <- true
-        | Keys.F12->
+        | { kdKey = Kf12 } ->
             repl.RebootUpd()
-            ev.Handled <- true
         | _ -> ()
 
     let keyPress (ev : KeyPressEventArgs) =
@@ -1243,7 +1220,11 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             xOffset <- ev.NewValue
             upd false)
 
-        textArea.KeyDown.Add(keyDown)
+        textArea.KeyDown.Add(fun ev ->
+            match KeyDown.CreateFromKeyData(ev.KeyData) with
+            | Some kd -> defaultKeyDown kd
+            | None -> ()
+            ev.Handled <- true)
         textArea.KeyPress.Add(keyPress)
         textArea.Paint.Add(textAreaPaint)
         textArea.GotFocus.Add(fun ev ->
@@ -1312,7 +1293,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     member this.TextArea : OpaqueIMEControl = textArea
     member this.Doc = undoTree.Get
     member this.Amend newDoc = undoTree.Amend(newDoc)
-    
+    member this.DefaultKeyDown e = defaultKeyDown e
     member this.EditorText
         with get() = Doc.getAllString undoTree.Get
         and set s =
