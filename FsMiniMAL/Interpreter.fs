@@ -10,7 +10,6 @@ open Syntax
 open Types
 open Typechk
 open Value
-open Message
 
 type Tag =
     | Start = 0

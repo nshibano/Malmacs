@@ -11,7 +11,6 @@ open Types
 open Unify
 open Typechk
 open Value
-open Message
 
 type lang =
     | En

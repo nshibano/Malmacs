@@ -1,4 +1,4 @@
-﻿module FsMiniMAL.Message
+﻿namespace FsMiniMAL
 
 open Syntax
 open Types

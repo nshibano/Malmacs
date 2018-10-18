@@ -15,7 +15,6 @@ open FsMiniMAL.Value
 open FsMiniMAL.Lexing
 open FsMiniMAL.Syntax
 open FsMiniMAL.Typechk
-open FsMiniMAL.Message
 
 
 let taskCoroutineStarter name (f : memory_manager -> value array -> value) (mm : memory_manager) (argv : value array) =

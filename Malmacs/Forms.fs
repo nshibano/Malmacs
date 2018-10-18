@@ -236,6 +236,15 @@ and Repl() as this =
                 interp.Run(1)
 
                 if (match interp.State with State.Running | State.Paused -> false | _ -> true) then
+                    match interp.LatestMessage with
+                    | Some (FsMiniMAL.Message.UncaughtException _ as msg) ->
+                        logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.Ja 100 msg)
+                        let sb = new StringBuilder()
+                        interp.Stacktrace(10, sb)
+                        logInput (sb.ToString())
+                    | Some (FsMiniMAL.Message.UncatchableException _ as msg) ->
+                        logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.Ja 100 msg)
+                    | _ -> ()
                     // the thread is finished
                     runningQueue.RemoveAt(0)
                     match mt with

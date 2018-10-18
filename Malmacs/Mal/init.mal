@@ -8,7 +8,7 @@ lex {
   fun token =
     "fun"|"val"|"var"|"if"|"then"|
     "while"|"case"|"begin"|"end"|
-    "type"|"of"|"else"|"for"|"to"|"do" { Keyword }
+    "type"|"of"|"else"|"for"|"to"|"do"|"as" { Keyword }
     ['a'-'z'] (letter|digit|'_')* { Lower }
     ['A'-'Z'] (letter|digit|'_')* { Upper }
     digit (letter|digit)* |         
@@ -27,7 +27,7 @@ lex {
     '"' | eof { (lexbuf.lbStartPos <- st; Literal) }
     _         { string st lexbuf }
   and comment st level =
-    "*)" | eof { if level = 1 then (lexbuf.lbStartPos <- st; Comment ) else comment st (level - 1) lexbuf }
+    "*)" | eof { if level = 1 then (lexbuf.lbStartPos <- st; Comment) else comment st (level - 1) lexbuf }
     "(*" { comment st (level + 1) lexbuf }
     _    { comment st level lexbuf }
   and eolComment st =
@@ -119,7 +119,16 @@ malproc <-
         end
     | MkeyDown (e, ({ kdKey = Kenter } as kd)) ->
         begin
-          val lineIndex = editorGetLineIndexFromCharPos e 0;
+          
+          val sel = editorGetSelection e;
+          val lineRange = editorGetLineRange e sel.sCaretPos;
+          val lineString = editorGetTextFromRange e lineRange;
+          val m = regexMatch lineString @"\A[\t\s]*" 0;
+          val len = matchGetLength m;
+          
+          
+          //val hoge = sel.sCaretPos;
+          //val lineIndex = editorGetLineIndexFromCharPos e 0;
           printString (sprintf "Enter\r\n");
           editorDefaultKeyDown e kd
         end
