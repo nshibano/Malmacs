@@ -8,7 +8,8 @@ lex {
   fun token =
     "fun"|"val"|"var"|"if"|"then"|
     "while"|"case"|"begin"|"end"|
-    "type"|"of"|"else"|"for"|"to"|"do"|"as" { Keyword }
+    "type"|"of"|"else"|"for"|"to"|
+    "do"|"as"                     { Keyword }
     ['a'-'z'] (letter|digit|'_')* { Lower }
     ['A'-'Z'] (letter|digit|'_')* { Upper }
     digit (letter|digit)* |         
@@ -28,8 +29,8 @@ lex {
     _         { string st lexbuf }
   and comment st level =
     "*)" | eof { if level = 1 then (lexbuf.lbStartPos <- st; Comment) else comment st (level - 1) lexbuf }
-    "(*" { comment st (level + 1) lexbuf }
-    _    { comment st level lexbuf }
+    "(*"       { comment st (level + 1) lexbuf }
+    _          { comment st level lexbuf }
   and eolComment st =
     "\r\n"| "\n" | "\r" | eof { (lexbuf.lbStartPos <- st; Comment) }
     _                         { eolComment st lexbuf }};
@@ -117,20 +118,14 @@ malproc <-
                 highlightKeyword highlightingKeywords.[i] ciHighlighted s accu;
             editorSetColor editor accu
         end
-    | MkeyDown (e, ({ kdKey = Kenter } as kd)) ->
+    | MkeyDown (e, { kdKey = Kenter }) ->
         begin
-          
           val sel = editorGetSelection e;
-          val lineRange = editorGetLineRange e sel.sCaretPos;
+          val lineIndex = editorGetLineIndexFromCharPos e sel.sCaretPos;
+          val lineRange = editorGetLineRange e lineIndex;
           val lineString = editorGetTextFromRange e lineRange;
           val m = regexMatch lineString @"\A[\t\s]*" 0;
-          val len = matchGetLength m;
-          
-          
-          //val hoge = sel.sCaretPos;
-          //val lineIndex = editorGetLineIndexFromCharPos e 0;
-          printString (sprintf "Enter\r\n");
-          editorDefaultKeyDown e kd
+          editorInput e true (editorGetNewlineString e ^ matchGetValue m);
         end
     | MkeyDown (e, kd) -> editorDefaultKeyDown e kd);
 

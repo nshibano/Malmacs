@@ -475,7 +475,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                         accu <- block_create mm frame.tag frame.fields
                         stack_discard_top()
                 | _ -> dontcare()
-            | UEapply expl ->
+            | UEapply (expl, _) ->
                 let frame = frame :?> ApplyFrame
                 match frame.pc with
                 | Tag.Start ->
@@ -919,6 +919,21 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
         let pfni fmt = Printf.kprintf (fun s ->
             sb.Append("  ") |> ignore
             sb.AppendLine s |> ignore) fmt
+        let printLoc (loc : location) =
+            let bgn = loc.st.AbsoluteOffset
+            let ed = loc.ed.AbsoluteOffset
+            let chunk =
+                let sb = StringBuilder()
+                let mutable pos = bgn
+                sb.Add("\"")
+                while pos < ed && pos < bgn + 50 do
+                    sb.Add(Printer.escaped_char loc.src.[pos])
+                    pos <- pos + 1
+                sb.Add("\"")
+                if pos <> ed then
+                    sb.Add("...")
+                sb.ToString()
+            sprintf "%s (%d,%d) %s" loc.st.FileName (loc.st.Line+1) (loc.st.Column+1) chunk
         pfn "Stacktrace:"
         let st = min (limit - 1) stack_topidx
         if st <> stack_topidx then
@@ -930,7 +945,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
             | UEblock _ -> pfni "Block"
             | UEblockwith _ -> pfni "Blockwith"
             | UEarray _ -> pfni "Array"
-            | UEapply _ -> pfni "Apply"
+            | UEapply (_, loc) -> pfni "Apply %s" (printLoc loc)
             | UEtailcall _ -> pfni "UEtailcall"
             | UEcoroutine -> pfni "Coroutine"
             | UEbegin _ -> pfni "Begin"
@@ -972,7 +987,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
 
     member this.StartApply(values : value array) =
         clear()
-        let code = UEapply (Array.map (fun v -> UEconst v) values)
+        let code = UEapply (Array.map (fun v -> UEconst v) values, dummyLoc "StartApply")
         start_code code
         state <- State.Running
 

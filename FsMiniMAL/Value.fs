@@ -63,7 +63,7 @@ and code =
   | UEblock of tag : int * fields : code array
   | UEblockwith of orig : code * field_indexes : int array * field_values : code array // { orig with field = expr; ... }
   | UEarray of code array
-  | UEapply of code array
+  | UEapply of code array * Syntax.location
   | UEtailcall of code array
   | UEfn of env_size : int * arity : int * is_capture_flags : bool array * ofss : int array * code
   | UEbegin of code array

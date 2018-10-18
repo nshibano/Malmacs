@@ -6,6 +6,14 @@ open FsMiniMAL.Lexing
 
 type location = { src : string; st : Position; ed : Position }
 
+let dummyLoc name =
+    let pos =
+        { pos_fname = name
+          pos_lnum = 0
+          pos_bol = 0
+          pos_cnum = 0 }
+    { src = ""; st = pos; ed = pos }
+
 type type_expr = 
     { st_desc : type_desc
       st_loc : location }

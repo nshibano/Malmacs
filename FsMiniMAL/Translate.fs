@@ -143,7 +143,7 @@ and expression (alloc : alloc) (tailcall_info : (string * int) option) (se : Syn
             else
                 let ue = expression alloc None e
                 let uargs = List.map (expression alloc None) l
-                UEapply(Array.ofList (ue :: uargs))
+                UEapply(Array.ofList (ue :: uargs), e.se_loc)
         | SEfn(patl, e) -> 
             let patl = Array.ofList patl
             let alloc' = alloc.CreateNewEnv()
