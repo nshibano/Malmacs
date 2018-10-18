@@ -302,21 +302,35 @@ and Repl() as this =
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
         | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.Ja cols msg)
     
-    let editorGetTextCoroutineStarter (mm : memory_manager) (argv : value array) =
+    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : value array) =
         let e = to_obj argv.[0] :?> Editor
+        let range = interp.ObjOfValue<Range> argv.[1]
         let doc = e.Doc
+        let sb = StringBuilder()
         let mutable state = 0
         let mutable i = 0
-        let sb = StringBuilder()
+        let mutable j = 0
+
+        if 0 <= range.rBegin && range.rBegin <= doc.CharCount &&
+           0 <= range.rEnd && range.rEnd <= doc.CharCount &&
+           range.rBegin <= range.rEnd
+        then
+            i <- Doc.getRowIndexFromCharPos doc range.rBegin
+            j <- Doc.getRowIndexFromCharPos doc range.rEnd
+        else
+            state <- 2
 
         { new IMalCoroutine with
             member x.Run(slice) =
-                if e.IsDisposed then state <- 3
+                if state = 0 && e.IsDisposed then state <- 3
                 let timestampAtStart = Environment.TickCount
                 while state = 0 && Environment.TickCount - timestampAtStart < slice do
-                    if i < doc.RowTree.Count then
-                        let row = doc.RowTree.[i]
-                        sb.Add(row.String)
+                    if i <= j then
+                        let row, rowRange = Doc.getRow doc i
+                        let bgn = max 0 (range.rBegin - rowRange.rBegin)
+                        let ed = min row.String.Length (range.rEnd - rowRange.rBegin)
+                        let count = ed - bgn
+                        sb.Append(row.String, bgn, count) |> ignore
                         i <- i + 1
                     else
                         state <- 1
@@ -325,6 +339,7 @@ and Repl() as this =
             member x.Result =
                 match state with
                 | 1 -> of_string mm (sb.ToString())
+                | 2 -> mal_raise_Invalid_argument()
                 | 3 -> mal_failwith mm "editorGetText: The editor has been disposed."
                 | _ -> dontcare()
             member x.Dispose() = () }
@@ -437,7 +452,9 @@ and Repl() as this =
             | Some h -> h.OriginalPath
             | None -> ""))
 
-        interp.Set("editorGetText", Vcoroutine (1, editorGetTextCoroutineStarter), interp.Typeof<Editor -> string>())
+        interp.Fun("editorGetTextLength", fun mm (e : Editor) -> e.Doc.CharCount)
+        interp.Set("editorGetTextFromCharRange", Vcoroutine (2, editorGetTextFromCharRangeCoroutineStarter interp), interp.Typeof<Editor -> Range -> string>())
+        interp.Do("fun editorGetText (e : editor) = editorGetTextFromCharRange e { rBegin = 0, rEnd = editorGetTextLength e }")
 
         interp.Fun("editorSetText", (fun mm (e : Editor) (s : string) ->
             malEnsureEditorIsOk mm e
