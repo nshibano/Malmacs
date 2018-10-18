@@ -117,6 +117,12 @@ malproc <-
                 highlightKeyword highlightingKeywords.[i] ciHighlighted s accu;
             editorSetColor editor accu
         end
+    | MkeyDown (e, ({ kdKey = Kenter } as kd)) ->
+        begin
+          val lineIndex = editorGetLineIndexFromCharPos e 0;
+          printString (sprintf "Enter\r\n");
+          editorDefaultKeyDown e kd
+        end
     | MkeyDown (e, kd) -> editorDefaultKeyDown e kd);
 
 fun initiateHighlighting() = arrayIter editorInitiateHighlighting (getEditors());

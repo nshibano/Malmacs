@@ -409,6 +409,7 @@ and Repl() as this =
 
         interp.RegisterFsharpTypes([|
             ("range", typeof<Range>)
+            ("selection", typeof<Selection>)
             ("colorInfo", typeof<ColorInfo>)
             ("message", typeof<Message>)
             ("key", typeof<Key>)
@@ -474,6 +475,7 @@ and Repl() as this =
         interp.Fun("editorGetLineRange", (fun mm (e : Editor) i ->
             try Doc.getLineRange e.Doc i
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))
+        interp.Fun("editorGetSelection", (fun mm (e : Editor) -> e.Doc.Selection))
         interp.Fun("editorDefaultKeyDown", (fun mm (e : Editor) (kd : KeyDown) -> e.DefaultKeyDown(kd)))
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
@@ -746,7 +748,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         vScroll.LargeChange <- max (textArea.Height / lineHeight) 1
         topRowIndex <- max 0 (min topRowIndex vScroll.MaximumValueThatCanBeReachedThroughUserInteraction)
         if scrollToCaret then
-            let caretRowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.CaretPos
+            let caretRowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.sCaretPos
             topRowIndex <- max (caretRowIndex - (max 1 textArea.Height / lineHeight) + 1) (min topRowIndex caretRowIndex)
         vScroll.Value <- topRowIndex
 
@@ -820,7 +822,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         input_upd true (Clipboard.GetText())
 
     let selectAll() =
-        setSelection { AnchorPos = 0; CaretPos = undoTree.Get.CharCount }
+        setSelection { sAnchorPos = 0; sCaretPos = undoTree.Get.CharCount }
     
     let selectAll_upd() =
         selectAll()
@@ -854,7 +856,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         match kd with
         | { kdKey = Kenter } ->
             let doc = undoTree.Get
-            let mutable rowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.CaretPos
+            let mutable rowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.sCaretPos
             while rowIndex - 1 >= 0 &&
                   let prevRow, _ = Doc.getRow doc (rowIndex - 1)
                   not prevRow.IsEndOfLine do rowIndex <- rowIndex - 1
@@ -907,9 +909,9 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
                 let dp = Point(caretXPos, y)
                 let pos = Doc.getCharPosFromPoint doc dp
                 if shift then
-                    undoTree.Amend({ doc with Selection = { doc.Selection with CaretPos = pos }})
+                    undoTree.Amend({ doc with Selection = { doc.Selection with sCaretPos = pos }})
                 else
-                    undoTree.Amend({ doc with Selection = { AnchorPos = pos; CaretPos = pos }})
+                    undoTree.Amend({ doc with Selection = { sAnchorPos = pos; sCaretPos = pos }})
             upd true
         | { kdKey = Kx; kdControl = true } ->
             cut_upd()
@@ -991,14 +993,14 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         if infoText = None then
             let posDesc =
                 if doc.Selection.Length = 0 then
-                    sprintf "%d" doc.Selection.CaretPos
+                    sprintf "%d" doc.Selection.sCaretPos
                 else
-                    sprintf "%d-%d" doc.Selection.AnchorPos doc.Selection.CaretPos
+                    sprintf "%d-%d" doc.Selection.sAnchorPos doc.Selection.sCaretPos
 
             let symbolDesc =
-                if doc.Selection.CaretPos = doc.CharCount then "EOF"
+                if doc.Selection.sCaretPos = doc.CharCount then "EOF"
                 else
-                    let symbol = Doc.getSymbolFromCharPos doc doc.Selection.CaretPos
+                    let symbol = Doc.getSymbolFromCharPos doc doc.Selection.sCaretPos
                     let name =
                         match symbol with
                         | " " -> "SP"
@@ -1095,7 +1097,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             let dp = getDp ev.Location
             let doc = undoTree.Get
             let pos = Doc.getCharPosFromPoint doc dp
-            setSelection { doc.Selection with CaretPos = pos }
+            setSelection { doc.Selection with sCaretPos = pos }
             caretXPos <- dp.X
             upd false
 

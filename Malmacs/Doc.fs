@@ -96,20 +96,20 @@ type Range =
         else x
 
 type Selection =
-    { CaretPos : int
-      AnchorPos : int }
+    { sCaretPos : int
+      sAnchorPos : int }
 
     member x.Length =
-        if x.AnchorPos <= x.CaretPos then
-            x.CaretPos - x.AnchorPos
+        if x.sAnchorPos <= x.sCaretPos then
+            x.sCaretPos - x.sAnchorPos
         else
-            x.AnchorPos - x.CaretPos
+            x.sAnchorPos - x.sCaretPos
 
     member x.ToRange() =
-        if x.CaretPos < x.AnchorPos then
-            { rBegin = x.CaretPos; rEnd = x.AnchorPos }
+        if x.sCaretPos < x.sAnchorPos then
+            { rBegin = x.sCaretPos; rEnd = x.sAnchorPos }
         else
-            { rBegin = x.AnchorPos; rEnd = x.CaretPos }
+            { rBegin = x.sAnchorPos; rEnd = x.sCaretPos }
 
 type Doc =
     { LayoutInfo : DocLayoutInfo
@@ -181,7 +181,7 @@ module Doc =
     
     let ColorInfo_Default = { ciForeColor = None; ciBackColor = None; ciUnderlineColor = None; ciText = None }
     let RowTreeInfo_Zero = { CharCount = 0; EndOfLineCount = 0; MaximumWidth = 0 }
-    let Selection_Zero = { CaretPos = 0; AnchorPos = 0 }
+    let Selection_Zero = { sCaretPos = 0; sAnchorPos = 0 }
 
     /// Returns index of the table item which is equal to the key.
     /// If not found, returns index of the highest item of the items which is lower than the key.
@@ -305,7 +305,7 @@ module Doc =
     let create info =
         { LayoutInfo = info
           RowTree = MeasuredTreeList<Row, RowTreeInfo>(rowTreeFunc, RowTreeInfo_Zero)
-          Selection = { CaretPos = 0; AnchorPos = 0 }
+          Selection = { sCaretPos = 0; sAnchorPos = 0 }
           ContentId = contentIdNew() }
 
     let getRow (doc : Doc) rowIndex =
@@ -399,7 +399,7 @@ module Doc =
             rowRange.rBegin + row.CharOffsets.[i]
 
     let setPos (doc : Doc) pos =
-        { doc with Selection = { AnchorPos = pos; CaretPos = pos }}
+        { doc with Selection = { sAnchorPos = pos; sCaretPos = pos }}
 
     let getChar (doc : Doc) charIndex =
         if 0 <= charIndex && charIndex < doc.CharCount then
@@ -552,7 +552,7 @@ module Doc =
 
         let doc = { doc with RowTree = head.AddRange(tail); ContentId = contentIdNew() }
         let newPos = validateCharPos doc true (charRange.rBegin + replacement.Length)
-        { doc with Selection = { AnchorPos = newPos; CaretPos = newPos }}
+        { doc with Selection = { sAnchorPos = newPos; sCaretPos = newPos }}
     
     let createFromString info (s : string) = replace (create info) s
 
@@ -581,7 +581,7 @@ module Doc =
         let x = row.XOffsets.[symbolIndex]
         Point(x, y)
 
-    let getCaretPoint (doc : Doc) = getPointFromCharPos doc doc.Selection.CaretPos
+    let getCaretPoint (doc : Doc) = getPointFromCharPos doc doc.Selection.sCaretPos
 
     let getCharIndexFromPoint (doc : Doc) (p : Point) =
         let rowIndex = { rBegin = 0; rEnd = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
@@ -636,12 +636,12 @@ module Doc =
                     let mutable j = symbolIndexInRow
                     while j + 1 < row.SymbolCount && (symbolIsSpaceOrTab (row.GetSymbol(j + 1)) = targetIsWhitespace) do
                         j <- j + 1
-                    { AnchorPos = rowRange.rBegin + row.CharOffsets.[i]; CaretPos = rowRange.rBegin + row.CharOffsets.[j + 1] }
+                    { sAnchorPos = rowRange.rBegin + row.CharOffsets.[i]; sCaretPos = rowRange.rBegin + row.CharOffsets.[j + 1] }
                 else
                     let pos = rowRange.rBegin + row.CharOffsets.[symbolIndexInRow]
-                    { AnchorPos = pos; CaretPos = pos; }
-            else { CaretPos = rowRange.rBegin; AnchorPos = rowRange.rBegin }
-        else { CaretPos = 0; AnchorPos = 0 }
+                    { sAnchorPos = pos; sCaretPos = pos; }
+            else { sCaretPos = rowRange.rBegin; sAnchorPos = rowRange.rBegin }
+        else { sCaretPos = 0; sAnchorPos = 0 }
     
     let changeLayout (layoutInfo : DocLayoutInfo) (doc : Doc) =
         if layoutInfo <> doc.LayoutInfo then
@@ -666,24 +666,24 @@ module Doc =
     let leftRight (rightNotleft : bool) (doc : Doc) =
         let sel = doc.Selection
         if sel.Length = 0 then
-            match prevNext rightNotleft doc sel.CaretPos with
+            match prevNext rightNotleft doc sel.sCaretPos with
             | Some left -> Some (setPos doc left)
             | None -> None
         else
-            Some (setPos doc ((if rightNotleft then max else min) sel.AnchorPos sel.CaretPos))
+            Some (setPos doc ((if rightNotleft then max else min) sel.sAnchorPos sel.sCaretPos))
     
     let shiftLeftRight (rightNotLeft : bool) (doc : Doc) =
         let sel = doc.Selection
-        match prevNext rightNotLeft doc sel.CaretPos with
-        | Some newPos -> Some { doc with Selection = { sel with CaretPos = newPos }}
+        match prevNext rightNotLeft doc sel.sCaretPos with
+        | Some newPos -> Some { doc with Selection = { sel with sCaretPos = newPos }}
         | None -> None
 
     let backDelete (deleteNotBack : bool) (doc : Doc) =
         let sel = doc.Selection
         let sel =
             if sel.Length = 0 then
-                match prevNext deleteNotBack doc sel.CaretPos with
-                | Some newPos -> { sel with CaretPos = newPos }
+                match prevNext deleteNotBack doc sel.sCaretPos with
+                | Some newPos -> { sel with sCaretPos = newPos }
                 | None -> sel
             else sel
         if sel.Length > 0 then
