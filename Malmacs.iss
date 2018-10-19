@@ -38,6 +38,7 @@ Source: "Malmacs\bin\Release\System.ValueTuple.dll"; DestDir: "{app}"; Flags: ig
 Source: "Malmacs\bin\Release\Ude.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Malmacs\Malmacs.config.Release.json"; DestDir: "{app}"; DestName: "Malmacs.config.json";Flags: ignoreversion
 Source: "Malmacs\Mal\init.mal"; DestDir: "{app}\Mal"; Flags: ignoreversion
+Source: "Malmacs\Mal\mal.mal"; DestDir: "{app}\Mal"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
