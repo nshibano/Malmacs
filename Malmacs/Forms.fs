@@ -56,14 +56,7 @@ and Repl() as this =
     let cols = 100
 
     let mutable logDoc =
-        let info = 
-            { FontSpec = Ja_Consolas_MSGothic
-              FontSize = 20
-              PageWidth = 1000
-              TabWidthInSpaces = 8
-              Padding = padding
-              YOffset1 = -2
-              YOffset2 = 0 }
+        let info = DocLayoutInfo.Default 1000 20
         let info = { info with PageWidth = (cols + 10) * (Doc.measure info "a") }
         Doc.create info
 
@@ -97,7 +90,7 @@ and Repl() as this =
         let screenRowCount = textArea.Height / logDoc.LayoutInfo.LineHeight
         vscroll.LargeChange <- max (screenRowCount - 1) 0
         vscroll.Minimum <- 0
-        vscroll.Maximum <- max (logDoc.RowCount - 2) 0
+        vscroll.Maximum <- max (logDoc.RowCount - (if logDoc.HasTrailingEmptyLine then 2 else 1)) 0
         topRowIndex <- min topRowIndex vscroll.MaximumValueThatCanBeReachedThroughUserInteraction
         vscroll.Value <- topRowIndex
 
