@@ -18,9 +18,9 @@ lex {
     "fun"|"val"|"var"|"if"|"then"|
     "while"|"case"|"begin"|"end"|
     "type"|"of"|"else"|"for"|"to"|
-    "do"|"as";
+    "do"|"as"|"and";
     
-    fun token =
+  fun token =
     keywords                      { MALTkeyword }
     ['a'-'z'] (letter|digit|'_')* { MALTlower }
     ['A'-'Z'] (letter|digit|'_')* { MALTupper }
