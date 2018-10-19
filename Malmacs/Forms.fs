@@ -1057,7 +1057,6 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         if state = EditorState.Idle then
             if ev.Button.HasFlag(MouseButtons.Left) then
                 let dp = getDp ev.Location
-                let doc = undoTree.Get
                 let pos = Doc.getCharPosFromPoint undoTree.Get dp
                 state <- LeftDown
                 setSelection

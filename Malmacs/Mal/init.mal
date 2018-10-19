@@ -3,15 +3,6 @@ val ciDefault = { ciForeColor = None, ciBackColor = None, ciUnderlineColor = Non
 val ciError = { ciDefault with ciUnderlineColor = Some (colorOfRgb 0xFF0000) };
 val ciHighlighted = { ciDefault with ciForeColor = Some (colorOfRgb 0x00FF00), ciBackColor = Some (colorOfRgb 0x000000) };
 
-fun getLastSymbolRange (s : string) =
-  begin
-    val len = stringLength s;
-    if len = 0 then (0, 0)
-    else if s.[len - 2] = '\r' && s.[len - 1] = '\n' then
-      (len - 2, len)
-    else (len - 1, len)
-  end
-
 val highlightingKeywords = [||];
 
 fun highlightKeyword (keyword : string) (ci : colorInfo) (text : string) (colors : colorInfo array) =
