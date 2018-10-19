@@ -1058,9 +1058,14 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             if ev.Button.HasFlag(MouseButtons.Left) then
                 let dp = getDp ev.Location
                 let doc = undoTree.Get
-                let pos = Doc.getCharPosFromPoint doc dp
+                let pos = Doc.getCharPosFromPoint undoTree.Get dp
                 state <- LeftDown
-                setPos pos
+                setSelection
+                    { sCaretPos = pos
+                      sAnchorPos =
+                      if Control.ModifierKeys.HasFlag(Keys.Shift) then
+                          undoTree.Get.Selection.sAnchorPos
+                      else pos }
                 caretXPos <- dp.X
                 upd false
             else ()
