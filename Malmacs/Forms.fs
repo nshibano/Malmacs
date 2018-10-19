@@ -41,7 +41,6 @@ and Repl() as this =
 
     let vScrollWidth = 20
     let leftMargin = 5
-    let padding = 1
 
     let menu = new MenuStripWithClickThrough()
 
