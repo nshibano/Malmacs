@@ -41,6 +41,10 @@ malproc <-
           val m = regexMatch lineString @"\A[\t\s]*" 0;
           editorInput e true (editorGetNewlineString e ^ matchGetValue m);
         end
+    | MkeyDown (e, { kdKey = Ktab }) ->
+        begin
+          editorInput e true "    ";
+        end
     | MkeyDown (e, kd) -> editorDefaultKeyDown e kd);
 
 fun initiateHighlighting() = arrayIter editorInitiateHighlighting (getEditors());
