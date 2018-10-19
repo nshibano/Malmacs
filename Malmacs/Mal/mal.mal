@@ -1,0 +1,125 @@
+(* syntax highlighting for FsMiniMAL *)
+
+type malToken =
+    MALTlower 
+  | MALTupper 
+  | MALTliteral 
+  | MALTeof 
+  | MALTkeyword
+  | MALTcomment 
+  | MALTlparen 
+  | MALTrparen 
+  | MALTcolon;
+
+lex {
+  val letter = ['a'-'z' 'A'-'Z'];
+  val digit = ['0'-'9'];
+  val keywords =
+    "fun"|"val"|"var"|"if"|"then"|
+    "while"|"case"|"begin"|"end"|
+    "type"|"of"|"else"|"for"|"to"|
+    "do"|"as";
+    
+    fun token =
+    keywords                      { MALTkeyword }
+    ['a'-'z'] (letter|digit|'_')* { MALTlower }
+    ['A'-'Z'] (letter|digit|'_')* { MALTupper }
+    digit (letter|digit)* |         
+    '\'' _ '\'' |
+    "'\\''" |
+    "'\\" letter "'"              { MALTliteral }
+    '"'                           { malString lexbuf.lbStartPos lexbuf }
+    "(*"                          { malComment lexbuf.lbStartPos 1 lexbuf }
+    "//"                          { malEolComment lexbuf.lbStartPos lexbuf }
+    eof                           { MALTeof }
+    "("                           { MALTlparen }
+    ")"                           { MALTrparen }
+    ":"                           { MALTcolon }
+    _                             { token lexbuf }
+  and malString st =
+    '"' |
+    eof   { (lexbuf.lbStartPos <- st; MALTliteral) }
+    _     { malString st lexbuf }
+  and malComment st level =
+    "*)" |
+    eof     { if level = 1 then
+                (lexbuf.lbStartPos <- st; MALTcomment)
+              else
+                malComment st (level - 1) lexbuf }
+    "(*"    { malComment st (level + 1) lexbuf }
+    _       { malComment st level lexbuf }
+  and malEolComment st =
+    "\r\n"| "\n" | "\r" | eof { (lexbuf.lbStartPos <- st; MALTcomment) }
+    _                         { malEolComment st lexbuf }};
+
+val malCiDefault =
+    { ciForeColor = None,
+      ciBackColor = None,
+      ciUnderlineColor = None,
+      ciText = None };
+
+val malCiError = { malCiDefault with ciUnderlineColor = Some (colorOfRgb 0xFF0000) };
+
+val malCiHighlighted =
+  { malCiDefault with
+      ciForeColor = Some (colorOfRgb 0x00FF00),
+      ciBackColor = Some (colorOfRgb 0x000000) };
+
+fun malGetLastSymbolRange (s : string) =
+  begin
+    val len = stringLength s;
+    if len = 0 then (0, 0)
+    else if s.[len - 2] = '\r' && s.[len - 1] = '\n' then
+      (len - 2, len)
+    else (len - 1, len)
+  end
+
+fun malHighlight (s : string) (accu : colorInfo array) =
+  begin
+    val lb = lexbufCreate s;
+    var state = None;
+    fun set rgb =
+      begin
+        val ci = { malCiDefault with ciForeColor = Some (colorOfRgb rgb) };
+        for i = lb.lbStartPos to lb.lbEndPos - 1 do
+          accu.[i] <- ci;
+      end;
+    while not lb.lbEof do
+        case token lb of
+          | MALTlower ->
+            (case state of
+             | None -> set 0xD00000
+             | Some _ -> set 0x800080)
+          | MALTupper ->  set 0x0000D0
+          | MALTliteral -> set 0x808000
+          | MALTkeyword -> set 0x008000
+          | MALTcomment -> set 0x808080
+          | MALTcolon -> (case state of None -> state <- Some 0 | _ -> ())
+          | MALTrparen -> (case state of
+                           | None -> ()
+                           | Some 0 -> state <- None
+                           | Some n -> state <- Some (n - 1))
+          | MALTlparen -> (case state of
+                           | None -> ()
+                           | Some n -> state <- Some (n + 1))
+          | MALTeof -> ();
+    case malTypecheck s of
+    | Some (msg, (st, ed)) ->
+      begin
+        val len = stringLength s;
+            if st = len then
+              begin
+                val st, ed = malGetLastSymbolRange s;
+                for i = st to ed - 1 do
+                  accu.[i] <- { accu.[i] with
+                                  ciUnderlineColor = Some (colorOfRgb 0xFF0000),
+                                  ciText = Some msg }
+              end
+            else
+              for i = st to ed - 1 do
+                accu.[i] <- { accu.[i] with
+                                ciUnderlineColor = Some (colorOfRgb 0xFF0000),
+                                ciText = Some msg }
+      end
+    | None -> ()
+  end;
