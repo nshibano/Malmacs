@@ -553,6 +553,7 @@ let type_printf_cmds cmds ty_result =
     loop cmds
 
 let rec expression (warning_sink : warning_sink) (tyenv : tyenv) (type_vars : Dictionary<string, type_expr>) (current_level : int) (ty_hint : type_expr option) (e : expression) =
+  let ty =
     match e.se_desc with
     | SEid s ->
         if is_constructor s then
@@ -868,7 +869,7 @@ let rec expression (warning_sink : warning_sink) (tyenv : tyenv) (type_vars : Di
             | None, [] -> raise (Type_error (Label_undefined s, e.se_loc))
         let ty_field, ty_record = instanciate_label current_level info
         unify_exp tyenv e1 ty1 ty_record 
-        e.se_desc <- SEapply ({ se_desc = SEid "."; se_loc = e.se_loc }, [e1; { se_desc = SEint (info.li_index.ToString()); se_loc = e.se_loc }])
+        e.se_desc <- SEapply ({ se_desc = SEid "."; se_loc = e.se_loc; se_type = None }, [e1; { se_desc = SEint (info.li_index.ToString()); se_loc = e.se_loc; se_type = None }])
         ty_field
     | SEsetfield (e1, s, e2) ->
         let ty1 = expression warning_sink tyenv type_vars current_level None e1
@@ -887,7 +888,7 @@ let rec expression (warning_sink : warning_sink) (tyenv : tyenv) (type_vars : Di
         let ty_field, ty_record = instanciate_label current_level info
         unify_exp tyenv e1 ty1 ty_record 
         expression_expect warning_sink tyenv type_vars current_level ty_field e2
-        e.se_desc <- SEapply ({ se_desc = SEid ".<-"; se_loc = e.se_loc }, [e1; { se_desc = SEint (info.li_index.ToString()); se_loc = e.se_loc }; e2])
+        e.se_desc <- SEapply ({ se_desc = SEid ".<-"; se_loc = e.se_loc; se_type = None }, [e1; { se_desc = SEint (info.li_index.ToString()); se_loc = e.se_loc; se_type = None }; e2])
         ty_unit
     | SEfor (s, e1, _, e2, e3) ->
         expression_expect warning_sink tyenv type_vars current_level ty_int e1
@@ -904,6 +905,8 @@ let rec expression (warning_sink : warning_sink) (tyenv : tyenv) (type_vars : Di
         expression_expect warning_sink tyenv type_vars current_level ty e1
         ty
     | _ -> dontcare()
+  e.se_type <- Some ty
+  ty
 
 /// Infer the type of expression with expectation. The expectation is used as a hint.
 /// Returns unit and the result remains in the ty_expected.

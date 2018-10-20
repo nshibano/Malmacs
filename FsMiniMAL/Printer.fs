@@ -435,6 +435,11 @@ let print_value_colored define cols ty value =
 
 let print_value define cols ty value = fst (print_value_colored define cols ty value)
 
+let print_type tyenv cols ty =
+    let node = node_of_type tyenv (create_tvar_assoc_table()) ty
+    update_sizes node
+    string_of_node cols node
+
 let print_definition (define : tyenv) cols name (info : value_info) value =
     let sxn1 = Section.Create(Flow, 0)
     let valvar = match info.vi_access with Immutable -> "val" | Mutable -> "var"

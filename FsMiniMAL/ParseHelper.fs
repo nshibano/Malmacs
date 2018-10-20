@@ -25,7 +25,8 @@ let make_cmd (ps : IParseState) desc =
 
 let make_expr (ps : IParseState) desc = 
     { se_desc = desc
-      se_loc = get_loc ps }
+      se_loc = get_loc ps
+      se_type = None }
 
 let make_typedef (ps : IParseState) prms name kind = 
     { sd_name = name
@@ -35,11 +36,14 @@ let make_typedef (ps : IParseState) prms name kind =
 
 let make_ident (ps : IParseState) s = 
     { se_desc = SEid s
-      se_loc = get_loc ps }
+      se_loc = get_loc ps
+      se_type = None }
 
 let make_string (ps : IParseState) s = make_expr ps (SEstring s)
 let make_unop (ps : IParseState) s e = make_expr ps (SEapply(make_ident ps s, [ e ]))
+
 let make_binop (ps : IParseState) s e1 e2 = make_expr ps (SEapply(make_ident ps s, [ e1; e2 ]))
+
 let make_ternop (ps : IParseState) s e1 e2 e3 = make_expr ps (SEapply(make_ident ps s, [ e1; e2; e3 ]))
 let make_pat_string (ps : IParseState) (s : string) = make_pat ps (SPstring s)
 let make_cons_pat (ps : IParseState) a l = make_pat ps (SPapply ("::", make_pat ps (SPtuple [ a; l ])))

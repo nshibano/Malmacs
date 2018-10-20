@@ -82,7 +82,8 @@ type DfaNode =
 
 type expression = 
     { mutable se_desc : expression_desc
-      se_loc : location }
+      se_loc : location
+      mutable se_type : Types.type_expr option }
 
 and expression_desc = 
     | SEid of string
@@ -172,3 +173,29 @@ let describe_location (loc : location) =
         pf "%d, char %d to line %d, char %d: \"%s ... %s\"" (st.Line + 1) (st.AbsoluteOffset - st.StartOfLineAbsoluteOffset + 1) (ed.Line + 1) (ed.AbsoluteOffset - ed.StartOfLineAbsoluteOffset + 1) first_token last_token
         
     sb.ToString()
+
+let expressionDo (f : expression -> unit) (e : expression) =
+    match e.se_desc with
+    | SEid _
+    | SEint _
+    | SEfloat _
+    | SEchar _ -> ()
+    | SEtuple l
+    | SElist (_, l) -> List.iter f l
+    | SEstring _ -> ()
+    | SEapply (e_func, e_args) -> f e_func; List.iter f e_args
+    | SEfn (_, e) -> f e
+    | SEbegin _ -> ()
+    | SEcase (e, cases)
+    | SEtry (e, cases) -> f e; List.iter (fun (_, e_when, e) -> Option.iter f e_when; f e) cases
+    | SEifthenelse (e1, e2, e3) -> f e1; f e2; Option.iter f e3
+    | SEset (_, e) -> f e
+    | SEfor (_, e1, _, e2, e3) -> f e1; f e2; f e3
+    | SEwhile (e1, e2) -> f e1; f e2
+    | SEtype (e, _) -> f e
+    | SErecord (e, l) -> Option.iter f e; List.iter (fun (_, e) -> f e) l
+    | SEgetfield (e, _) -> f e
+    | SEsetfield (e1, _, e2) -> f e1; f e2
+    | SEurecord (fields, orig) -> Option.iter f orig; List.iter (fun (_, _, e) -> f e) fields
+    | SEconstr (_, l) -> List.iter f l
+    | SEformat _ -> ()

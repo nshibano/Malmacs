@@ -304,7 +304,7 @@ let translate_top_command_list (alloc : alloc) (tyenvs : tyenv array) (ccmds : c
                 let actions_accu = List()
                 for action in actions do
                     let args = (List.map (fun arg -> { sp_desc = SPid arg; sp_loc = action.se_loc }) args) @ [{ sp_desc = SPid "lexbuf"; sp_loc = action.se_loc }]
-                    let ue = expression alloc None ({ se_desc = SEfn (args, action); se_loc = action.se_loc })
+                    let ue = expression alloc None ({ se_desc = SEfn (args, action); se_loc = action.se_loc; se_type = None })
                     actions_accu.Add(ue)
                 accu.Add(args.Length + 1, ofss.[i], alphabets, dfa, actions_accu.ToArray())
             
