@@ -14,6 +14,7 @@ open Value
 let src = """
 val x = 0 + 1;
 val y = x + x;
+fun f x = if x < 0 then 1 else x * 100;
 """
 
 [<EntryPoint>]
@@ -28,10 +29,14 @@ let main argv =
         match cmd.sc_desc with
         | SCval l
         | SCCval (l, _) -> for (_, e) in l do exprLoop e
+        | SCfun l
+        | SCvar l
+        | SCCfun (l, _)
+        | SCCvar (l, _) -> for (_, e) in l do exprLoop e
         | _ -> ()
     and exprLoop (e : Syntax.expression) =
         match e.se_desc with
-        | SEid s -> printfn "%s %d-%d %s" s e.se_loc.st.AbsoluteOffset e.se_loc.ed.AbsoluteOffset (match e.se_type with None -> "n/a" | Some ty -> (fst (Printer.print_type tyenv 1000 ty)))
+        | SEid s -> printfn "%s [%d, %d) %d %s" s e.se_loc.st.AbsoluteOffset e.se_loc.ed.AbsoluteOffset (e.se_loc.ed.AbsoluteOffset - e.se_loc.st.AbsoluteOffset) (match e.se_type with None -> "?" | Some ty -> (fst (Printer.print_type tyenv 1000 ty)))
         | SEbegin l -> List.iter cmdLoop l
         | _ -> Syntax.expressionDo exprLoop e
 
