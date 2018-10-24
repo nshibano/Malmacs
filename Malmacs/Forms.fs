@@ -481,6 +481,7 @@ and Repl() as this =
         interp.Fun("editorDefaultKeyDown", (fun mm (e : Editor) (kd : KeyDown) -> e.DefaultKeyDown(kd)))
         interp.Fun("editorGetNewlineString", (fun mm (e : Editor) -> e.GetNewlineString()))
         interp.Fun("editorInput", (fun mm (e : Editor) (s : string) -> e.Input false s))
+        interp.Fun("editorSetRevisionSealed", (fun mm (e : Editor) -> e.SetRevisionSealed()))
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =
@@ -723,7 +724,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     let maximumAmendPeriod = TimeSpan.FromSeconds(1.0)
 
     let commit (newDoc : Doc) (atomic : bool) =
-        if atomic || undoTree.Current.HasBeenSavedOnce || undoTree.Current.Next.Count > 0 || DateTime.Now - latestCommitDate > maximumAmendPeriod then
+        if atomic || undoTree.Current.Sealed || undoTree.Current.Next.Count > 0 || DateTime.Now - latestCommitDate > maximumAmendPeriod then
             latestCommitDate <- if atomic then DateTime.MinValue else DateTime.Now
             undoTree.Commit(newDoc)
         else
@@ -1203,7 +1204,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         let text = Doc.getAllString undoTree.Get
         match FileHelper.trySaveAs textFileHandle text with
         | TrySaveAsResult.TSARsuccess handle ->
-            undoTree.Current.HasBeenSavedOnce <- true
+            undoTree.Current.Sealed <- true
             textFileHandle <- Some handle
             lastlySavedRevision <- undoTree.Current.Revision
         | TrySaveAsResult.TSARcancelled -> ()
@@ -1216,7 +1217,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         let text = Doc.getAllString undoTree.Get
         match FileHelper.trySave textFileHandle.Value text with
         | FileHelper.TrySaveResult.TSRsuccess ->
-            undoTree.Current.HasBeenSavedOnce <- true
+            undoTree.Current.Sealed <- true
             lastlySavedRevision <- undoTree.Current.Revision
         | FileHelper.TrySaveResult.TSRfialed exn ->
             applyWithInNestedMessageLoopFlagSet (fun () -> MessageBox.Show(exn.Message) |> ignore) ()
@@ -1301,7 +1302,8 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
 
         upd false
         resetCaretXPos()
-        
+
+    member this.SetRevisionSealed() = undoTree.Current.Sealed <- true
     member this.HighlightingState with get() = highlightingState and set x = highlightingState <- x
     member this.LastlyHighlightingInitiatedContentId with get() = lastlyHighlightingInitiatedContentId and set x = lastlyHighlightingInitiatedContentId <- x
     member this.TextArea : OpaqueIMEControl = textArea

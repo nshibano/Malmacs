@@ -10,7 +10,7 @@ type UndoTreeNode<'T> =
       Prev : UndoTreeNode<'T> option
       Next : List<UndoTreeNode<'T>>
       mutable SelectedBranchIndex : int
-      mutable HasBeenSavedOnce : bool
+      mutable Sealed : bool
       mutable RevisionsAhead : int }
     
     static member Create(prev, x, rev) =
@@ -20,7 +20,7 @@ type UndoTreeNode<'T> =
           Prev = prev
           Next = List<UndoTreeNode<'T>>()
           SelectedBranchIndex = 0
-          HasBeenSavedOnce = false
+          Sealed = false
           RevisionsAhead = 0 }
 
 type UndoTree<'T> =

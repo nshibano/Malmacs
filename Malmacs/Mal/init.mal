@@ -39,11 +39,13 @@ malproc <-
           val lineRange = editorGetLineRange e lineIndex;
           val lineString = editorGetTextFromRange e lineRange;
           val m = regexMatch lineString @"\A[\t\s]*" 0;
-          editorInput e true (editorGetNewlineString e ^ matchGetValue m);
+          editorInput e (editorGetNewlineString e ^ matchGetValue m);
+		  editorSetRevisionSealed e;
         end
     | MkeyDown (e, { kdKey = Ktab }) ->
         begin
-          editorInput e true "    ";
+          editorInput e "    ";
+		  editorSetRevisionSealed e;
         end
     | MkeyDown (e, kd) -> editorDefaultKeyDown e kd);
 
