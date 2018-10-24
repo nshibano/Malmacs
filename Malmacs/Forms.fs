@@ -230,12 +230,12 @@ and Repl() as this =
                 if (match interp.State with State.Running | State.Paused -> false | _ -> true) then
                     match interp.LatestMessage with
                     | Some (FsMiniMAL.Message.UncaughtException _ as msg) ->
-                        logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.Ja 100 msg)
+                        logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.En 100 msg)
                         let sb = new StringBuilder()
                         interp.Stacktrace(10, sb)
                         logInput (sb.ToString())
                     | Some (FsMiniMAL.Message.UncatchableException _ as msg) ->
-                        logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.Ja 100 msg)
+                        logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.En 100 msg)
                     | _ -> ()
                     // the thread is finished
                     runningQueue.RemoveAt(0)
@@ -306,7 +306,7 @@ and Repl() as this =
     let messageHook msg =
         match msg with
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
-        | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.Ja cols msg)
+        | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.En cols msg)
     
     let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : value array) =
         let e = to_obj argv.[0] :?> Editor
@@ -480,7 +480,7 @@ and Repl() as this =
         interp.Fun("editorGetSelection", (fun mm (e : Editor) -> e.Doc.Selection))
         interp.Fun("editorDefaultKeyDown", (fun mm (e : Editor) (kd : KeyDown) -> e.DefaultKeyDown(kd)))
         interp.Fun("editorGetNewlineString", (fun mm (e : Editor) -> e.GetNewlineString()))
-        interp.Fun("editorInput", (fun mm (e : Editor) (atomic : bool) (s : string) -> e.Input atomic s))
+        interp.Fun("editorInput", (fun mm (e : Editor) (s : string) -> e.Input false s))
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =
@@ -504,11 +504,11 @@ and Repl() as this =
         interp.Fun("malTypecheck", fun mm src ->
             match parse src with
             | Error (FsMiniMAL.Message.LexicalError (_, loc) as msg) ->
-                let s = Printer.print_message Printer.lang.Ja 1000 msg
+                let s = Printer.print_message Printer.lang.En 1000 msg
                 let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
                 Some (s, rangeOfLocation loc)
             | Error (FsMiniMAL.Message.SyntaxError loc as msg) ->
-                let s = Printer.print_message Printer.lang.Ja 1000 msg 
+                let s = Printer.print_message Printer.lang.En 1000 msg 
                 let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
                 Some (s, rangeOfLocation loc)
             | Error _ -> dontcare()
@@ -520,7 +520,7 @@ and Repl() as this =
                     Typechk.type_command_list warning_sink tyenv cmds |> ignore
                     None
                 with FsMiniMAL.Typechk.Type_error (err, loc) ->
-                    let s = Printer.print_typechk_error Printer.lang.Ja 1000 err
+                    let s = Printer.print_typechk_error Printer.lang.En 1000 err
                     let s = Regex.Replace(s, @"[ \t\r\n]+", " ")
                     Some (s, rangeOfLocation loc))
 
