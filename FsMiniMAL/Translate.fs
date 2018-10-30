@@ -95,8 +95,8 @@ and expression (alloc : alloc) (tailcall_info : (string * int) option) (se : Syn
                 let uel = List.map (expression alloc None) l
                 UEblock(tag, Array.ofSeq uel)
         | SEint s -> UEconst(Value.ofInt (int s))
-        | SEchar c -> UEconst(Value.ofChar dummy_mm c)
-        | SEfloat x -> UEconst (Value.ofFloat dummy_mm x)
+        | SEchar c -> UEconst(Value.ofChar c)
+        | SEfloat x -> UEconst (Value.ofFloat x)
         | SEtuple [] -> UEconst(Value.unit)
         | SEtuple l -> UEblock(0, Array.ofSeq (Seq.map (expression alloc None) l))
         | SElist (LKarray, l) -> UEarray(Array.ofSeq(Seq.map (expression alloc None) l))

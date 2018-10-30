@@ -220,7 +220,7 @@ let ofInt i = MalInt(i) :> MalValue
 
 let toInt (v : MalValue) = (v :?> MalInt).Get
 
-let ofChar (mm : MemoryManager) (c : char) = ofInt (int c)
+let ofChar (c : char) = ofInt (int c)
 
 let toChar (v : MalValue) =
     let i = toInt v
@@ -229,7 +229,7 @@ let toChar (v : MalValue) =
     else
         dontcare()
 
-let ofFloat (mm : MemoryManager) x = MalFloat(x) :> MalValue
+let ofFloat x = MalFloat(x) :> MalValue
 
 let toFloat (v : MalValue) = (v :?> MalFloat).Get
 
@@ -517,9 +517,9 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
             elif ty = typeof<int32> then
                 (fun (mm : MemoryManager) (obj : obj) -> ofInt (obj :?> int32))
             elif ty = typeof<char> then
-                (fun (mm : MemoryManager) (obj : obj) -> ofChar mm (obj :?> char))
+                (fun (mm : MemoryManager) (obj : obj) -> ofChar (obj :?> char))
             elif ty = typeof<float> then
-                (fun (mm : MemoryManager) (obj : obj) -> ofFloat mm (obj :?> float))
+                (fun (mm : MemoryManager) (obj : obj) -> ofFloat (obj :?> float))
             elif ty = typeof<string> then
                 (fun (mm : MemoryManager) (obj : obj) -> of_string mm (obj :?> string))
             elif tyenv.registered_abstract_types.ContainsKey(ty) then

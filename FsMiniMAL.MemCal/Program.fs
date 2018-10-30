@@ -27,7 +27,7 @@ let main argv =
     let sizeof_int = test (fun mm i -> ofInt i)
     printfn "sizeof int: %.1f" sizeof_int
 
-    let sizeof_float = test (fun mm i -> ofFloat mm (float i))    
+    let sizeof_float = test (fun mm i -> ofFloat (float i))    
     printfn "sizeof float: %.1f" sizeof_float
 
     let sizeof_block_len0 = test (fun mm i -> block_create mm 0 (Array.create 0 unit))

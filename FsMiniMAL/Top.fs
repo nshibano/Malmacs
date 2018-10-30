@@ -24,10 +24,10 @@ let tyenv_std, alloc_std, genv_std =
     let add_i name i = add name ty_int (ofInt i)    
     let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> ofInt (f (toInt argv.[0])))
     let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> ofInt (f (toInt argv.[0]) (toInt argv.[1])))
-    let add_f name x = add name ty_float (ofFloat dummy_mm x)
-    let add_ff name (f : float -> float) = add_func name ty_ff 1 (fun mm argv -> ofFloat mm (f (toFloat argv.[0])))
-    let add_fff name (f : float -> float -> float) = add_func name ty_fff 2 (fun mm argv -> ofFloat mm (f (toFloat argv.[0]) (toFloat argv.[1])))
-    let add_if name (f : int -> float) = add_func name ty_if 1 (fun mm argv -> ofFloat mm (f (toInt argv.[0])))
+    let add_f name x = add name ty_float (ofFloat x)
+    let add_ff name (f : float -> float) = add_func name ty_ff 1 (fun mm argv -> ofFloat (f (toFloat argv.[0])))
+    let add_fff name (f : float -> float -> float) = add_func name ty_fff 2 (fun mm argv -> ofFloat (f (toFloat argv.[0]) (toFloat argv.[1])))
+    let add_if name (f : int -> float) = add_func name ty_if 1 (fun mm argv -> ofFloat (f (toInt argv.[0])))
     let add_fi name (f : float -> int) = add_func name ty_fi 1 (fun mm argv -> ofInt (f (toFloat argv.[0])))
     let add_vvb name (f : MalValue -> MalValue -> bool) = add_func name ty_vvb 2 (fun mm argv -> of_bool (f argv.[0] argv.[1]))
     let add_uu name (f : MemoryManager -> unit) = add_func name ty_uu 1 (fun mm argv -> f mm; unit)
@@ -118,7 +118,7 @@ let tyenv_std, alloc_std, genv_std =
             let s = (argv.[0] :?> MalString).Get
             let i = toInt argv.[1]
             if 0 <= i && i < s.Length then
-                ofChar mm s.[i]
+                ofChar s.[i]
             else mal_raise_Index_out_of_range()
         | MalValueKind.ARRAY ->
             try array_get mm (argv.[0]) (toInt argv.[1])
@@ -274,7 +274,7 @@ let tyenv_std, alloc_std, genv_std =
     add_func "floatOfString" (arrow ty_string ty_float) 1
         (fun mm argv ->
             match Double.TryParse(to_string argv.[0]) with
-            | true, x -> ofFloat mm x
+            | true, x -> ofFloat x
             | false, _ -> mal_failwith mm "float_of_string: Invalid argument")
 
     add_func "charOfInt" (arrow ty_int ty_char) 1
