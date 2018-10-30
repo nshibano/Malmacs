@@ -33,8 +33,8 @@ type private Parser(s : string) =
     let invalidChar() = raise (InvalidChar pos)
 
     let skip (keyword : string) =
-        for c in keyword do
-            if s.[pos] <> c then invalidChar()
+        for i = 0 to keyword.Length - 1 do
+            if s.[pos] <> keyword.[i] then invalidChar()
             pos <- pos + 1
 
     let skipWhitespace() =
