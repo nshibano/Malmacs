@@ -285,9 +285,6 @@ let get_fields (v : MalValue) =
     | _ -> dontcare()
 
 let to_malarray (v : MalValue) = v :?> MalArray
-    //match v with
-    //| Varray malary -> malary
-    //| _ -> dontcare()
 
 exception MalException of MalValue
 exception MalUncatchableException of string
@@ -318,23 +315,20 @@ let array_create (mm : MemoryManager) (needed_capacity : int) =
     MalArray(0, Array.zeroCreate<MalValue> capacity, mm) :> MalValue
 
 let array_add (mm : MemoryManager) (ary : MalValue) (item : MalValue) =
-        let ary = ary :?> MalArray
-    //match ary with  
-    //| Varray ({ count = count; storage = storage } as ary) ->
-        let capacity = ary.Storage.Length //if isNull ary.Storage then 0 else storage.Length
-        if capacity < ary.Count + 1 then
-            let new_capacity =
-                try find_next_capacity_exn mm.maximum_array_length (ary.Count + 1)
-                with :? InvalidOperationException -> mal_raise_Insufficient_memory()
-            let increased_bytes = value_array_increment * (new_capacity - capacity)
-            if not (checkFreeMemory mm increased_bytes) then mal_raise_Insufficient_memory()
-            let new_storage = Array.zeroCreate<MalValue> new_capacity
-            if not (isNull ary.Storage) then Array.blit ary.Storage 0 new_storage 0 ary.Count
-            ary.Storage <- new_storage
-            Interlocked.Add(&ary.MemoryManager.counter, increased_bytes) |> ignore
-        ary.Storage.[ary.Count] <- item
-        ary.Count <- ary.Count + 1
-    //| _ -> dontcare()
+    let ary = ary :?> MalArray
+    let capacity = ary.Storage.Length //if isNull ary.Storage then 0 else storage.Length
+    if capacity < ary.Count + 1 then
+        let new_capacity =
+            try find_next_capacity_exn mm.maximum_array_length (ary.Count + 1)
+            with :? InvalidOperationException -> mal_raise_Insufficient_memory()
+        let increased_bytes = value_array_increment * (new_capacity - capacity)
+        if not (checkFreeMemory mm increased_bytes) then mal_raise_Insufficient_memory()
+        let new_storage = Array.zeroCreate<MalValue> new_capacity
+        if not (isNull ary.Storage) then Array.blit ary.Storage 0 new_storage 0 ary.Count
+        ary.Storage <- new_storage
+        Interlocked.Add(&ary.MemoryManager.counter, increased_bytes) |> ignore
+    ary.Storage.[ary.Count] <- item
+    ary.Count <- ary.Count + 1
 
 let array_append (mm : MemoryManager) (a : MalValue) (b : MalValue) =
     let a = a :?> MalArray
@@ -346,42 +340,17 @@ let array_append (mm : MemoryManager) (a : MalValue) (b : MalValue) =
     c.Count <- c_count
     c :> MalValue
 
-    //match a, b with
-    //| Varray { count = a_count; storage = a_storage }, Varray { count = b_count; storage = b_storage } ->
-    //    let c_count = a_count + b_count
-    //    let c = array_create mm c_count
-    //    match c with
-    //    | Varray ({ storage = c_storage } as c_ary) ->
-    //        if a_count <> 0 then Array.blit a_storage 0 c_storage 0 a_count
-    //        if b_count <> 0 then Array.blit b_storage 0 c_storage a_count b_count
-    //        c_ary.count <- c_count
-    //        c
-    //    | _ -> dontcare()
-    //| _ -> dontcare()
-
 let array_get (mm : MemoryManager) (v : MalValue) (i : int) =
     let ary = v :?> MalArray
     if 0 <= i && i < ary.Count then
         ary.Storage.[i]
     else raise (IndexOutOfRangeException())
-    //match v with
-    //| Varray ary ->
-    //    if 0 <= i && i < ary.count then
-    //        ary.storage.[i]
-    //    else raise (IndexOutOfRangeException())
-    //| _ -> dontcare()
 
 let array_set (ary : MalValue) i (x : MalValue) =
     let ary = ary :?> MalArray
     if 0 <= i && i < ary.Count then
         ary.Storage.[i] <- x
     else raise (IndexOutOfRangeException())
-    //match ary with
-    //| Varray ary ->
-    //    if 0 <= i && i < ary.count then
-    //        ary.storage.[i] <- x
-    //    else raise (IndexOutOfRangeException())
-    //| _ -> dontcare()
 
 let array_remove_at (mm : MemoryManager) (v : MalValue) i =
     let ary = v :?> MalArray
@@ -391,27 +360,12 @@ let array_remove_at (mm : MemoryManager) (v : MalValue) i =
         ary.Storage.[ary.Count - 1] <- Unchecked.defaultof<MalValue>
         ary.Count <- ary.Count - 1
     else raise (IndexOutOfRangeException())
-    //match v with
-    //| Varray ary ->
-    //    if 0 <= i && i < ary.count then
-    //        for j = i + 1 to ary.count - 1 do
-    //            ary.storage.[j - 1] <- ary.storage.[j]
-    //        ary.storage.[ary.count - 1] <- Unchecked.defaultof<value>
-    //        ary.count <- ary.count - 1
-    //    else raise (IndexOutOfRangeException())
-    //| _ -> dontcare()
 
 let array_clear (mm : MemoryManager) (v : MalValue) =
     let ary = v :?> MalArray
     for i = 0 to ary.Count - 1 do
         ary.Storage.[i] <- Unchecked.defaultof<MalValue>
     ary.Count <- 0
-    //match v with
-    //| Varray ary ->
-    //    for i = 0 to ary.count - 1 do
-    //        ary.storage.[i] <- Unchecked.defaultof<value>
-    //    ary.count <- 0
-    //| _ -> dontcare()
 
 let array_copy (mm : MemoryManager) (orig : MalValue) =
     let orig = orig :?> MalArray
@@ -419,17 +373,6 @@ let array_copy (mm : MemoryManager) (orig : MalValue) =
     Array.blit orig.Storage 0 copy.Storage 0 orig.Count
     copy.Count <- orig.Count
     copy :> MalValue
-
-    //match orig with
-    //| Varray { count = count; storage = storage } ->
-    //    let copy = array_create mm count
-    //    match copy with
-    //    | Varray ({ storage = copy_storage } as copy_ary) ->
-    //        if count <> 0 then Array.blit storage 0 copy_storage 0 count;
-    //        copy_ary.count <- count
-    //        copy
-    //    | _ -> dontcare()
-    //| _ -> dontcare()
 
 let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> obj>) (tyenv : tyenv) (touch : HashSet<MalValue>) (ty : Type) (value : MalValue) =
     if touch.Contains(value) then mal_failwith dummy_mm "cyclic value in interop"
@@ -461,15 +404,6 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> 
                         array.SetValue(obj_of_value cache tyenv touch ty_elem ary.Storage.[i], i)
                     touch.Remove(value) |> ignore
                     array :> obj)
-                    //match value with
-                    //| Varray malarray ->
-                    //    let array = System.Array.CreateInstance(ty_elem, malarray.count)
-                    //    touch.Add(value) |> ignore
-                    //    for i = 0 to malarray.count - 1 do
-                    //        array.SetValue(obj_of_value cache tyenv touch ty_elem malarray.storage.[i], i)
-                    //    touch.Remove(value) |> ignore
-                    //    array :> obj
-                    //| _ -> dontcare())
             elif FSharpType.IsTuple ty then
                 let constr = FSharpValue.PreComputeTupleConstructor(ty)
                 let types = FSharpType.GetTupleElements(ty)
@@ -596,5 +530,4 @@ let wrap_fsharp_func (tyenv : tyenv) (obj_of_value_cache : Dictionary<Type, Hash
             try invokefast.Invoke(null, Array.append [| func; mm; |] arg_objs)
             with :? System.Reflection.TargetInvocationException as exn -> raise exn.InnerException
         value_of_obj value_of_obj_cache tyenv tyl.[tyl.Length - 1] mm result_obj
-    //Vfunc (arity, func)
     MalFunc(arity, func) :> MalValue

@@ -165,16 +165,10 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
             accu <- env.[ofs]
         | UEgetenvvar ofs ->
             accu <- (env.[ofs] :?> MalVar).Content
-            //match env.[ofs] with
-            //| Vvar r -> accu <- !r
-            //| _ -> dontcare()
         | UEgetcap ofs ->
             accu <- captures.[ofs]
         | UEgetcapvar ofs ->
             accu <- (captures.[ofs] :?> MalVar).Content
-            //match captures.[ofs] with
-            //| Vvar r -> accu <- !r
-            //| _ -> dontcare()
         | UEfn (env_size, argc, is_capture_flags, ofss, body) ->
             let capture_values = Array.zeroCreate<MalValue> is_capture_flags.Length
             for i = 0 to is_capture_flags.Length - 1 do
@@ -462,11 +456,6 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     frame.pc <- Tag.BlockWith_EvalSets
                     frame.tag <- (accu :?> MalBlock).Tag
                     frame.fields <- Array.copy ((accu :?> MalBlock).Fields)
-                    //match accu with
-                    //| Vblock (tag, fields, _) ->
-                    //    frame.tag <- tag
-                    //    frame.fields <- Array.copy fields
-                    //| _ -> dontcare()
                     start_code exprl.[0]
                 | Tag.BlockWith_EvalSets ->
                     frame.fields.[idxl.[frame.i]] <- accu

@@ -142,7 +142,7 @@ let tyenv_std, alloc_std, genv_std =
 
     add_func "arraySub" (arrow3 (ty_array ty_a) ty_int ty_int (ty_array ty_a)) 3
         (fun mm argv ->
-            let ary = to_malarray argv.[0]
+            let ary = argv.[0] :?> MalArray
             let start = toInt argv.[1]
             let count = toInt argv.[2]
             if not (0 <= count && 0 <= start && start + count <= ary.Count) then mal_raise_Index_out_of_range()
