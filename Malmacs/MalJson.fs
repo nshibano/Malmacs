@@ -301,31 +301,31 @@ type private Printer(singleLine : bool) =
 
 let print (singleLine : bool) (json : json) = Printer(singleLine).Print(json)
 
-let private invalidOperation() = raise (InvalidOperationException())
+let private invOp() = raise (InvalidOperationException())
 
 let rec find (json : json) (path : string list) =
     match json, path with
     | Jobject fields, hd :: tl -> find (snd (Array.find (fun pair -> fst pair = hd) fields)) tl
     | _, [] -> json
-    | _ -> invalidOperation()
+    | _ -> invOp()
 
 let toInt (json : json) =
     match json with
     | Jnumber s -> int s
-    | _ -> invalidOperation()
+    | _ -> invOp()
 
 let toString (json : json) =
     match json with
     | Jstring s -> s
-    | _ -> invalidOperation()
+    | _ -> invOp()
 
 let toStringArray (json : json) =
     match json with
     | Jarray ary -> Array.map toString ary
-    | _ -> invalidOperation()
+    | _ -> invOp()
 
 let toBool (json : json) =
     match json with
     | Jtrue -> true
     | Jfalse -> false
-    | _ -> invalidOperation()
+    | _ -> invOp()
