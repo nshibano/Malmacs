@@ -264,7 +264,7 @@ let of_string (mm : MemoryManager) (s : string) =
 
 let to_obj (v : MalValue) = (v :?> MalObj).Obj
 
-let of_obj (o : obj) = MalObj(obj) :> MalValue //Vobj o
+let of_obj (o : obj) = MalObj(o) :> MalValue
 
 let block_create (mm : MemoryManager) tag (fields : MalValue array) =
     Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
