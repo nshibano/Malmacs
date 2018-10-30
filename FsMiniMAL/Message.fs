@@ -9,12 +9,12 @@ type Message =
     | SyntaxError of location
     | TypeError of Typechk.type_error_desc * location
 
-    | EvaluationComplete of tyenv * value * type_expr
-    | NewValues of tyenv * (string * value * value_info) list 
+    | EvaluationComplete of tyenv * MalValue * type_expr
+    | NewValues of tyenv * (string * MalValue * value_info) list 
     | TypeDefined of string list
     | ExceptionDefined of string
     | TypeHidden of string
     | ValueRemoved of string
     
-    | UncaughtException of tyenv * value
+    | UncaughtException of tyenv * MalValue
     | UncatchableException of string

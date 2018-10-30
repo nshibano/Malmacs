@@ -47,7 +47,7 @@ and Repl() as this =
     let textArea = new OpaqueIMEControl()
     let vscroll = new VScrollBar()
 
-    let mutable mal : (Interpreter * value ref) option = None
+    let mutable mal : (Interpreter * Value ref) option = None
     let chunkQueue = List<string>()
     let messageQueue = List<Message>()
     let runningQueue = List<MalThread>()
@@ -158,7 +158,7 @@ and Repl() as this =
     let key_press (ev : KeyPressEventArgs) =
         if (not ev.Handled) && '\x20' < ev.KeyChar then // enter, space and tab are excluded here
             if state <> Compositioning then
-                commandInput (String(ev.KeyChar, 1))
+                commandInput (MalString(ev.KeyChar, 1))
                 upd()
             ev.Handled <- true
 
@@ -308,7 +308,7 @@ and Repl() as this =
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
         | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.En cols msg)
     
-    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : value array) =
+    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : Value array) =
         let e = to_obj argv.[0] :?> Editor
         let range = interp.ObjOfValue<Range> argv.[1]
         let doc = e.Doc
@@ -350,7 +350,7 @@ and Repl() as this =
                 | _ -> dontcare()
             member x.Dispose() = () }
 
-    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : memory_manager) (argv : value array) =
+    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : memory_manager) (argv : Value array) =
         let e = to_obj argv.[0] :?> Editor
         let ary = to_malarray argv.[1]
         let mutable state = 0
@@ -939,7 +939,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         if (not ev.Handled) && '\x20' < ev.KeyChar then // enter, space, tab はここで除外される
             match state with
             | Compositioning -> ()
-            | _ -> input_upd false (String(ev.KeyChar, 1))
+            | _ -> input_upd false (MalString(ev.KeyChar, 1))
             ev.Handled <- true
 
     let textAreaPaint (ev : PaintEventArgs) =

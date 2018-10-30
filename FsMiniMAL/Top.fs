@@ -20,7 +20,7 @@ let tyenv_std, alloc_std, genv_std =
         genv <- array_ensure_capacity_exn Int32.MaxValue (ofs + 1) genv
         genv.[ofs] <- value
 
-    let add_func name ty arity func = add name ty (Func(arity, func) :> value)
+    let add_func name ty arity func = add name ty (MalFunc(arity, func) :> MalValue)
     let add_i name i = add name ty_int (of_int dummy_mm i)    
     let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> of_int mm (f (to_int argv.[0])))
     let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> of_int mm (f (to_int argv.[0]) (to_int argv.[1])))
@@ -29,28 +29,28 @@ let tyenv_std, alloc_std, genv_std =
     let add_fff name (f : float -> float -> float) = add_func name ty_fff 2 (fun mm argv -> of_float mm (f (to_float argv.[0]) (to_float argv.[1])))
     let add_if name (f : int -> float) = add_func name ty_if 1 (fun mm argv -> of_float mm (f (to_int argv.[0])))
     let add_fi name (f : float -> int) = add_func name ty_fi 1 (fun mm argv -> of_int mm (f (to_float argv.[0])))
-    let add_vvb name (f : value -> value -> bool) = add_func name ty_vvb 2 (fun mm argv -> of_bool (f argv.[0] argv.[1]))
+    let add_vvb name (f : MalValue -> MalValue -> bool) = add_func name ty_vvb 2 (fun mm argv -> of_bool (f argv.[0] argv.[1]))
     let add_uu name (f : memory_manager -> unit) = add_func name ty_uu 1 (fun mm argv -> f mm; unit)
     
     add "kprintf" (arrow2 (arrow ty_string ty_b) (Tconstr (type_id.FORMAT, [ty_a; ty_b])) ty_a)
-        (KFunc (2, (fun mm frame ->
+        (MalKFunc (2, (fun mm frame ->
             let k = frame.[1]
-            let cmds = (frame.[2] :?> Obj).Obj :?> PrintfFormat.PrintfCommand list
+            let cmds = (frame.[2] :?> MalObj).Obj :?> PrintfFormat.PrintfCommand list
             let cmds_arity = MalPrintf.arity_of_cmds cmds
             let arity_remain = cmds_arity - (frame.Length - 3)
             if arity_remain > 0 then
-                [| Partial (arity_remain, frame) |]
+                [| MalPartial (arity_remain, frame) |]
             else
                 let s = MalPrintf.exec_cmds cmds (Array.sub frame 3 cmds_arity)
                 let j = 3 + cmds_arity
                 Array.append [| k; of_string mm s |] (Array.sub frame j (frame.Length - j)))))
-    add "compare" ty_vvi (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Compare, argv) :> IMalCoroutine))
-    add "=" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Equal, argv) :> IMalCoroutine))
-    add "<>" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Not_equal, argv) :> IMalCoroutine))
-    add "<" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_than, argv) :> IMalCoroutine))
-    add ">" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_than, argv) :> IMalCoroutine))
-    add "<=" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_equal, argv) :> IMalCoroutine))
-    add ">=" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_equal, argv) :> IMalCoroutine))
+    add "compare" ty_vvi (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Compare, argv) :> IMalCoroutine))
+    add "=" ty_vvb (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Equal, argv) :> IMalCoroutine))
+    add "<>" ty_vvb (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Not_equal, argv) :> IMalCoroutine))
+    add "<" ty_vvb (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_than, argv) :> IMalCoroutine))
+    add ">" ty_vvb (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_than, argv) :> IMalCoroutine))
+    add "<=" ty_vvb (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_equal, argv) :> IMalCoroutine))
+    add ">=" ty_vvb (MalCoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_equal, argv) :> IMalCoroutine))
     add_func "not" ty_bb 1 (fun mm argv -> of_bool (not (to_bool argv.[0])))    
     add_func "&&" ty_bbb 2 (fun mm argv -> of_bool (to_bool argv.[0] && to_bool argv.[1]))
     add_func "||" ty_bbb 2 (fun mm argv -> of_bool (to_bool argv.[0] || to_bool argv.[1]))
@@ -99,7 +99,7 @@ let tyenv_std, alloc_std, genv_std =
             if n < 0 then mal_failwith mm "array_create: negative length"
             let x = argv.[1]
             let v = array_create mm n
-            let ary = v :?> Array
+            let ary = v :?> MalArray
             for i = 0 to n - 1 do
                 ary.Storage.[i] <- x
             ary.Count <- n
@@ -107,20 +107,20 @@ let tyenv_std, alloc_std, genv_std =
 
     add_func "^" (arrow2 (ty_array ty_a) (ty_array ty_a) (ty_array ty_a)) 2 (fun mm argv -> array_append mm argv.[0] argv.[1])
 
-    let string_append_func (mm : memory_manager) (argv : value array) =
+    let string_append_func (mm : memory_manager) (argv : MalValue array) =
         of_string mm (to_string argv.[0] + to_string argv.[1])
     add_func "stringAppend" ty_sss 2 string_append_func
     add_func "^^" ty_sss 2 string_append_func
 
-    let array_get_func (mm : memory_manager) (argv : value array) =
+    let array_get_func (mm : memory_manager) (argv : MalValue array) =
         match argv.[0].Kind with
-        | ValueKind.VKstring ->
-            let s = (argv.[0] :?> String).Get
+        | MalValueKind.STRING ->
+            let s = (argv.[0] :?> MalString).Get
             let i = to_int argv.[1]
             if 0 <= i && i < s.Length then
                 of_char mm s.[i]
             else mal_raise_Index_out_of_range()
-        | ValueKind.VKarray ->
+        | MalValueKind.ARRAY ->
             try array_get mm (argv.[0]) (to_int argv.[1])
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()
         | _ -> dontcare()
@@ -128,7 +128,7 @@ let tyenv_std, alloc_std, genv_std =
     add_func ".[]" ty_array_get 2 array_get_func
     add_func "arrayGet" ty_array_get 2 array_get_func
 
-    let array_set_func (g : memory_manager) (argv : value array) =
+    let array_set_func (g : memory_manager) (argv : MalValue array) =
         try
             array_set argv.[0] (to_int argv.[1]) argv.[2]
             Value.unit
@@ -137,7 +137,7 @@ let tyenv_std, alloc_std, genv_std =
     add_func ".[]<-" ty_array_set 3 array_set_func
     add_func "arraySet" ty_array_set 3 array_set_func
 
-    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> of_int mm (argv.[0] :?> Array).Count)
+    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> of_int mm (argv.[0] :?> MalArray).Count)
     add_func "arrayCopy" (arrow (ty_array ty_a) (ty_array ty_a)) 1 (fun mm argv -> array_copy mm argv.[0])
 
     add_func "arraySub" (arrow3 (ty_array ty_a) ty_int ty_int (ty_array ty_a)) 3
@@ -212,23 +212,23 @@ let tyenv_std, alloc_std, genv_std =
             with _ -> mal_raise_Invalid_argument())
 
     add_func "stringStartWith" (Tarrow ("s", ty_string, Tarrow ("starting", ty_string, ty_bool))) 2
-        (fun (mm : memory_manager) (argv : value array) ->
+        (fun (mm : memory_manager) (argv : MalValue array) ->
             let s = to_string argv.[0]
             let starting = to_string argv.[1]
             of_bool (s.StartsWith(starting)))
 
     add_func "stringEndWith" (Tarrow ("s", ty_string, Tarrow ("ending", ty_string, ty_bool))) 2
-        (fun (mm : memory_manager) (argv : value array) ->
+        (fun (mm : memory_manager) (argv : MalValue array) ->
             let s = to_string argv.[0]
             let ending = to_string argv.[1]
             of_bool (s.EndsWith(ending)))
     
     add_func "stringToLower" ty_ss 1
-        (fun (mm : memory_manager) (argv : value array) ->
+        (fun (mm : memory_manager) (argv : MalValue array) ->
             of_string mm ((to_string argv.[0]).ToLowerInvariant()))
 
     add_func "stringIndexOf" (Tarrow ("s", ty_string, Tarrow ("pattern", ty_string, Tarrow ("startIndex", ty_int, ty_int)))) 3
-        (fun (mm : memory_manager) (argv : value array) ->
+        (fun (mm : memory_manager) (argv : MalValue array) ->
             let s = to_string argv.[0]
             let pattern = to_string argv.[1]
             let startIndex = to_int argv.[2]
@@ -236,13 +236,13 @@ let tyenv_std, alloc_std, genv_std =
             with _ -> mal_raise_Invalid_argument())
 
     add_func "pathGetExtension" ty_ss 1
-        (fun (mm : memory_manager) (argv : value array) ->
+        (fun (mm : memory_manager) (argv : MalValue array) ->
             try
                 of_string mm (System.IO.Path.GetExtension(to_string argv.[0]))
             with _ -> mal_failwith mm "Path contains invalid character")
 
     let ty_array_add = arrow2 (ty_array ty_a) ty_a ty_unit
-    let array_add_func (mm : memory_manager) (argv : value array) =
+    let array_add_func (mm : memory_manager) (argv : MalValue array) =
         array_add mm argv.[0] argv.[1]
         Value.unit
     add_func "arrayAdd" ty_array_add 2 array_add_func

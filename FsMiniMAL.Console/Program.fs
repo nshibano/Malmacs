@@ -37,7 +37,7 @@ let main argv =
         let wakeup = DateTime.Now.AddSeconds(t)
         mal.Store <- wakeup
         mal.State <- State.Paused))
-    mal.Set("print_uvalue", Func (1, (fun mm argv ->
+    mal.Set("print_uvalue", MalFunc (1, (fun mm argv ->
         let s = 
             if box argv.[0] = null
             then "<null>\r\n"

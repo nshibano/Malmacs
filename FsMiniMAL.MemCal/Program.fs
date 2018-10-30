@@ -16,7 +16,7 @@ let main argv =
     let many = 100_000
 
     let test constr =
-        let ary = Array.zeroCreate<value> many
+        let ary = Array.zeroCreate<Value> many
         let x0 = get_total_memory()
         for i = 0 to ary.Length - 1 do
             ary.[i] <- constr dummy_mm i
@@ -45,8 +45,8 @@ let main argv =
     printfn "array increment: %.1f" array_increment
 
     // We don't use String('a', 0) here because it returns shared constant object.
-    let sizeof_string_len1 = test (fun mm i -> of_string mm (String('a', 1))) 
-    let sizeof_string_len1000 = test (fun mm i -> of_string mm (String('a', 1000)))
+    let sizeof_string_len1 = test (fun mm i -> of_string mm (System.String('a', 1))) 
+    let sizeof_string_len1000 = test (fun mm i -> of_string mm (System.String('a', 1000)))
     let string_increment = (sizeof_string_len1000 - sizeof_string_len1) / 999.0
     let string_overhead = sizeof_string_len1 - string_increment
     printfn "string overhead: %.1f" string_overhead

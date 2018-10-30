@@ -108,25 +108,25 @@ let parenthesize (node : Node) =
 
 let textInvalid = "<invalid>"
 
-let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level : int) (ty : type_expr) (value : value) : Node =
+let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (level : int) (ty : type_expr) (value : MalValue) : Node =
     match repr ty, value.Kind with
     | Tarrow _, _ -> textNode st "<fun>"
     | Ttuple [], _ -> textNode st "()"
-    | Tconstr(type_id.INT, []), ValueKind.VKint ->
-        let s = (value :?> Value.Int).Get.ToString()
+    | Tconstr(type_id.INT, []), MalValueKind.INT ->
+        let s = (value :?> Value.MalInt).Get.ToString()
         let s =
             if 0 < level && s.[0] = '-' then
                 "(" + s + ")"
             else
                 s
         textNode st s
-    | Tconstr(type_id.CHAR, []), ValueKind.VKint (* Vint(i, _) when int Char.MinValue <= i && i <= int Char.MaxValue *) ->
-        let i = (value :?> Int).Get
+    | Tconstr(type_id.CHAR, []), MalValueKind.INT (* Vint(i, _) when int Char.MinValue <= i && i <= int Char.MaxValue *) ->
+        let i = (value :?> MalInt).Get
         if int Char.MinValue <= i && i <= int Char.MaxValue then
             textNode st ("'" + escaped_char (char i) + "'")
         else raise InvalidValue
-    | Tconstr(type_id.FLOAT, []), ValueKind.VKfloat ->
-        let x = (value :?> Float).Get
+    | Tconstr(type_id.FLOAT, []), MalValueKind.FLOAT ->
+        let x = (value :?> MalFloat).Get
         let s = string_of_float x
         let s =
             if 0 < level && s.[0] = '-' then
@@ -134,8 +134,8 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
             else
                 s
         textNode st s
-    | Tconstr (type_id.STRING, []), ValueKind.VKstring ->
-        let s = (value :?> String).Get
+    | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
+        let s = (value :?> MalString).Get
         let limit = 1000
         if limit < s.Length then
             let sb = StringBuilder()
@@ -155,8 +155,8 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
             textNode st "..."
     | Ttuple l, _ ->
         list_loop st (path.Add(value)) "(" ")" (Seq.zip l (get_fields value))
-    | Tconstr(type_id.ARRAY, [a]), ValueKind.VKarray ->
-        let ary = value :?> Array
+    | Tconstr(type_id.ARRAY, [a]), MalValueKind.ARRAY ->
+        let ary = value :?> MalArray
         let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }
         list_loop st (path.Add(value)) "[|" "|]" items
     | Tconstr(type_id.LIST, [a]), _ ->
@@ -211,11 +211,11 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
             match info.ti_kind with
             | Kbasic ->
                 let abstr() = textNode st "<abstr>"
-                if value.Kind = ValueKind.VKobj then
+                if value.Kind = MalValueKind.OBJ then
                 //match value with
                 //| Vobj o ->
-                    if (value :?> Obj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
-                        let m = (value :?> Obj).Obj :?> System.Text.RegularExpressions.Match
+                    if (value :?> MalObj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
+                        let m = (value :?> MalObj).Obj :?> System.Text.RegularExpressions.Match
                         let maxPreviewLength = 10
                         if m.Success then
                             if m.Length < maxPreviewLength then
@@ -322,12 +322,12 @@ and seq_loop (st : printer_state) (lp : string) (rp : string) (items : Node seq)
     section.Weld rp
     Section section
 
-and list_loop (st : printer_state) (path : ImmutableHashSet<value>) lp rp (items : (type_expr * value) seq) : Node =
+and list_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
     seq_loop st lp rp (Seq.map (fun (ty, v) -> value_loop st path 0 ty v) items)
 
 let node_of_value (tyenv : tyenv) ty value =
     try
-        value_loop { tyenv = tyenv; char_counter = 0; limit = 1000 } (ImmutableHashSet.Create<value>(Misc.PhysicalEqualityComparer)) 0 ty value
+        value_loop { tyenv = tyenv; char_counter = 0; limit = 1000 } (ImmutableHashSet.Create<MalValue>(Misc.PhysicalEqualityComparer)) 0 ty value
     with InvalidValue ->
         Text (StringBuilder(textInvalid))
 
@@ -493,7 +493,7 @@ let print_type tyenv cols ty =
     update_sizes node
     string_of_node cols node
 
-let print_definition (define : tyenv) cols name (info : value_info) (value : value) =
+let print_definition (define : tyenv) cols name (info : value_info) (value : MalValue) =
     let sxn1 = Section.Create(Flow, 0)
     let valvar = match info.vi_access with Immutable -> "val" | Mutable -> "var"
     sxn1.Add(sprintf "%s %s :" valvar name)
@@ -504,7 +504,7 @@ let print_definition (define : tyenv) cols name (info : value_info) (value : val
     let value =
         match info.vi_access with
         | Immutable -> value
-        | Mutable -> (value :?> Value.Var).Content
+        | Mutable -> (value :?> Value.MalVar).Content
     sxn2.Add(node_of_value define info.vi_type value)
     let node = Section sxn2
     update_sizes node

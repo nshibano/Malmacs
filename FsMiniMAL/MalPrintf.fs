@@ -132,7 +132,7 @@ let sprintf_G =
        sprintf "% 0-*.*G" |]
 
 
-let exec_cmds cmds (argv : value array) =
+let exec_cmds cmds (argv : MalValue array) =
     let sb = new StringBuilder()
     let mutable i = 0
     for cmd in cmds do

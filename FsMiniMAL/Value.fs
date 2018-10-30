@@ -21,81 +21,81 @@ let sizeof_string len = string_overhead + string_increment * len
 // allow only some kind of them have overridden Finalize method.
 // Doing so minimizes number of objects which goes to "finalizer queue" of CLR runtime.
 
-type ValueKind =
-    | VKint = 0
-    | VKfloat = 1
-    | VKstring = 2
-    | VKblock = 3
-    | VKarray = 4
-    | VKpartial = 5
-    | VKclosure = 6
-    | VKfunc = 7
-    | VKkfunc = 8
-    | VKcoroutine = 9
-    | VKvar = 10
-    | VKobj = 11
+type MalValueKind =
+    | INT = 0
+    | FLOAT = 1
+    | STRING = 2
+    | BLOCK = 3
+    | ARRAY = 4
+    | PARTIAL = 5
+    | CLOSURE = 6
+    | FUNC = 7
+    | KFUNC = 8
+    | COROUTINE = 9
+    | VAR = 10
+    | OBJ = 11
 
-type value (kind : ValueKind) =
+type MalValue (kind : MalValueKind) =
     member x.Kind = kind
 
-and Int (i : int) =
-    inherit value(ValueKind.VKint)
+and MalInt (i : int) =
+    inherit MalValue(MalValueKind.INT)
     member x.Get = i
 
-and Float (x : float) =
-    inherit value(ValueKind.VKfloat)
+and MalFloat (x : float) =
+    inherit MalValue(MalValueKind.FLOAT)
     member this.Get = x
 
-and String (s : string) =
-    inherit value(ValueKind.VKstring)
+and MalString (s : string) =
+    inherit MalValue(MalValueKind.STRING)
     member x.Get = s
 
-and Block (tag : int, fields : value array, mm : memory_manager) =
-    inherit value(ValueKind.VKblock)
+and MalBlock (tag : int, fields : MalValue array, mm : memory_manager) =
+    inherit MalValue(MalValueKind.BLOCK)
     member x.Tag = tag
     member x.Fields = fields
 
-and Array (count : int, storage: value array, mm : memory_manager) =
-    inherit value(ValueKind.VKarray)
+and MalArray (count : int, storage: MalValue array, mm : memory_manager) =
+    inherit MalValue(MalValueKind.ARRAY)
     let mutable count = count
     let mutable storage = storage
     member ary.Count with get() = count and set n = count <- n
     member ary.Storage with get() = storage and set a = storage <- a
 
-and Func(arity : int, f : memory_manager -> value array -> value) =
-    inherit value(ValueKind.VKfunc)
+and MalFunc(arity : int, f : memory_manager -> MalValue array -> MalValue) =
+    inherit MalValue(MalValueKind.FUNC)
     member x.Arity = arity
     member x.F = f
 
-and KFunc(arity : int, f : memory_manager -> value array -> value array) =
-    inherit value(ValueKind.VKkfunc)
+and MalKFunc(arity : int, f : memory_manager -> MalValue array -> MalValue array) =
+    inherit MalValue(MalValueKind.KFUNC)
     member x.Arity = arity
     member x.F = f
 
-and Coroutine(arity : int, starter : memory_manager -> value array -> IMalCoroutine) =
-    inherit value(ValueKind.VKcoroutine)
+and MalCoroutine(arity : int, starter : memory_manager -> MalValue array -> IMalCoroutine) =
+    inherit MalValue(MalValueKind.COROUTINE)
     member x.Arity = arity
     member x.Starter = starter
 
-and Closure(arity : int, envSize : int, captures : value array, code : code) =
-    inherit value(ValueKind.VKclosure)
+and MalClosure(arity : int, envSize : int, captures : MalValue array, code : code) =
+    inherit MalValue(MalValueKind.CLOSURE)
     member x.Arity = arity
     member x.EnvSize = envSize
     member x.Captures = captures
     member x.Code = code
 
-and Partial (arity : int, args : value array) =
-    inherit value(ValueKind.VKpartial)
+and MalPartial (arity : int, args : MalValue array) =
+    inherit MalValue(MalValueKind.PARTIAL)
     member x.Arity = arity
     member x.Args = args
 
-and Var (value : value) =
-    inherit value(ValueKind.VKvar)
+and MalVar (value : MalValue) =
+    inherit MalValue(MalValueKind.VAR)
     let mutable content = value
     member var.Content with get() = content and set x = content <- x
 
-and Obj (obj : obj) =
-    inherit value(ValueKind.VKobj)
+and MalObj (obj : obj) =
+    inherit MalValue(MalValueKind.OBJ)
     member x.Obj = obj
 
 //type value =
@@ -121,20 +121,20 @@ and Obj (obj : obj) =
 //        | Vstring (s, mm) -> Interlocked.Add(&mm.counter, - sizeof_string s.Length) |> ignore
 //        | _ -> ()
 
-and malarray =
-    { mutable count : int
-      mutable storage : value array
-      memory_manager : memory_manager }
+//and malarray =
+//    { mutable count : int
+//      mutable storage : value array
+//      memory_manager : memory_manager }
 
 and IMalCoroutine =
     inherit IDisposable
     abstract member IsFinished : bool
     abstract member Run : milliseconds : int -> unit
-    abstract member Result : value
+    abstract member Result : MalValue
 
 and code =
   // expressions
-  | UEconst of value
+  | UEconst of MalValue
   | UEgetenv of int
   | UEgetenvvar of int
   | UEsetenvvar of int * code
@@ -240,17 +240,17 @@ let check_free_memory (mm : memory_manager) needed_bytes =
 let of_int (mm : memory_manager) i =
     Interlocked.Add(&mm.counter, sizeof_int) |> ignore
     //Vint (i, mm)
-    Int(i) :> value
+    MalInt(i) :> MalValue
 
-let to_int (v : value) =
-    if v.Kind = ValueKind.VKint then
-        (v :?> Int).Get
+let to_int (v : MalValue) =
+    if v.Kind = MalValueKind.INT then
+        (v :?> MalInt).Get
     else dontcare()
 //    match v with Vint (i, _) -> i | _ -> dontcare()
 
 let of_char (mm : memory_manager) (c : char) = of_int mm (int c)
 
-let to_char (v : value) =
+let to_char (v : MalValue) =
     let i = to_int v
     if int Char.MinValue <= i && i <= int Char.MaxValue then
         char i
@@ -260,11 +260,11 @@ let to_char (v : value) =
 let of_float (mm : memory_manager) x =
     //Interlocked.Add(&mm.counter, sizeof_float) |> ignore
     //Vfloat (x, mm)
-    Float(x) :> value
+    MalFloat(x) :> MalValue
 
-let to_float (v : value) = // match v with Vfloat (x, _) -> x | _ -> dontcare()
-    if v.Kind = ValueKind.VKfloat then
-        (v :?> Float).Get
+let to_float (v : MalValue) = // match v with Vfloat (x, _) -> x | _ -> dontcare()
+    if v.Kind = MalValueKind.FLOAT then
+        (v :?> MalFloat).Get
     else dontcare()
 
 let zero = of_int dummy_mm 0
@@ -291,7 +291,7 @@ let to_bool v =
     //| Vint (1, _) -> true
     //| _ -> dontcare()
 
-let to_string (v : value) = (v :?> String).Get
+let to_string (v : MalValue) = (v :?> MalString).Get
     //match v with
     //| Vstring (s, _) -> s
     //| _ -> dontcare()
@@ -299,48 +299,48 @@ let to_string (v : value) = (v :?> String).Get
 let of_string (mm : memory_manager) (s : string) =
     //Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
     //Vstring (s, mm)
-    String(s) :> value
+    MalString(s) :> MalValue
 
-let to_obj (v : value) = (v :?> Obj).Obj
+let to_obj (v : MalValue) = (v :?> MalObj).Obj
     //match v with
     //| Vobj o -> o
     //| _ -> dontcare()
 
-let of_obj (o : obj) = Obj(obj) :> value //Vobj o
+let of_obj (o : obj) = MalObj(obj) :> MalValue //Vobj o
 
-let block_create (mm : memory_manager) tag (fields : value array) =
+let block_create (mm : memory_manager) tag (fields : MalValue array) =
     //Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
     //Vblock (tag, fields, mm)
-    Block(tag, fields, mm) :> value
+    MalBlock(tag, fields, mm) :> MalValue
 
-let get_tag (v : value) =
+let get_tag (v : MalValue) =
     //match v with
     //| Vint (i, _) -> i
     //| Vblock (tag, _, _) -> tag
     //| _ -> dontcare()
     match v.Kind with
-    | ValueKind.VKint -> to_int v
-    | ValueKind.VKblock -> (v :?> Block).Tag
+    | MalValueKind.INT -> to_int v
+    | MalValueKind.BLOCK -> (v :?> MalBlock).Tag
     | _ -> dontcare()
 
-let value_array_empty : value array = [||]
+let value_array_empty : MalValue array = [||]
 
-let get_fields (v : value) =
+let get_fields (v : MalValue) =
     //match v with
     //| Vint _ -> value_array_empty
     //| Vblock (_, fields, _) -> fields
     //| _ -> dontcare()
     match v.Kind with
-    | ValueKind.VKint -> value_array_empty
-    | ValueKind.VKblock -> (v :?> Block).Fields
+    | MalValueKind.INT -> value_array_empty
+    | MalValueKind.BLOCK -> (v :?> MalBlock).Fields
     | _ -> dontcare()
 
-let to_malarray (v : value) = v :?> Array
+let to_malarray (v : MalValue) = v :?> MalArray
     //match v with
     //| Varray malary -> malary
     //| _ -> dontcare()
 
-exception MalException of value
+exception MalException of MalValue
 exception MalUncatchableException of string
 
 let mal_failwith mm msg = raise (MalException (block_create mm tag_exn_Failure [| of_string mm msg |]))
@@ -367,10 +367,10 @@ let array_create (mm : memory_manager) (needed_capacity : int) =
     if not (check_free_memory mm bytes) then mal_raise_Insufficient_memory()
     //Interlocked.Add(&mm.counter, bytes) |> ignore
     //Varray { count = 0; storage = Array.zeroCreate<value> capacity; memory_manager = mm }
-    Array(0, Array.zeroCreate<value> capacity, mm) :> value
+    MalArray(0, Array.zeroCreate<MalValue> capacity, mm) :> MalValue
 
-let array_add (mm : memory_manager) (ary : value) (item : value) =
-        let ary = ary :?> Array
+let array_add (mm : memory_manager) (ary : MalValue) (item : MalValue) =
+        let ary = ary :?> MalArray
     //match ary with  
     //| Varray ({ count = count; storage = storage } as ary) ->
         let capacity = ary.Storage.Length //if isNull ary.Storage then 0 else storage.Length
@@ -380,7 +380,7 @@ let array_add (mm : memory_manager) (ary : value) (item : value) =
                 with :? InvalidOperationException -> mal_raise_Insufficient_memory()
             let increased_bytes = value_array_increment * (new_capacity - capacity)
             if not (check_free_memory mm increased_bytes) then mal_raise_Insufficient_memory()
-            let new_storage = Array.zeroCreate<value> new_capacity
+            let new_storage = Array.zeroCreate<MalValue> new_capacity
             if not (isNull ary.Storage) then Array.blit ary.Storage 0 new_storage 0 ary.Count
             ary.Storage <- new_storage
             //Interlocked.Add(&ary.memory_manager.counter, increased_bytes) |> ignore
@@ -388,15 +388,15 @@ let array_add (mm : memory_manager) (ary : value) (item : value) =
         ary.Count <- ary.Count + 1
     //| _ -> dontcare()
 
-let array_append (mm : memory_manager) (a : value) (b : value) =
-    let a = a :?> Array
-    let b = b :?> Array
+let array_append (mm : memory_manager) (a : MalValue) (b : MalValue) =
+    let a = a :?> MalArray
+    let b = b :?> MalArray
     let c_count = a.Count + b.Count
-    let c = array_create mm c_count :?> Array
+    let c = array_create mm c_count :?> MalArray
     Array.blit a.Storage 0 c.Storage 0 a.Count
     Array.blit b.Storage 0 c.Storage a.Count b.Count
     c.Count <- c_count
-    c :> value
+    c :> MalValue
 
     //match a, b with
     //| Varray { count = a_count; storage = a_storage }, Varray { count = b_count; storage = b_storage } ->
@@ -411,8 +411,8 @@ let array_append (mm : memory_manager) (a : value) (b : value) =
     //    | _ -> dontcare()
     //| _ -> dontcare()
 
-let array_get (mm : memory_manager) (v : value) (i : int) =
-    let ary = v :?> Array
+let array_get (mm : memory_manager) (v : MalValue) (i : int) =
+    let ary = v :?> MalArray
     if 0 <= i && i < ary.Count then
         ary.Storage.[i]
     else raise (IndexOutOfRangeException())
@@ -423,8 +423,8 @@ let array_get (mm : memory_manager) (v : value) (i : int) =
     //    else raise (IndexOutOfRangeException())
     //| _ -> dontcare()
 
-let array_set (ary : value) i (x : value) =
-    let ary = ary :?> Array
+let array_set (ary : MalValue) i (x : MalValue) =
+    let ary = ary :?> MalArray
     if 0 <= i && i < ary.Count then
         ary.Storage.[i] <- x
     else raise (IndexOutOfRangeException())
@@ -435,12 +435,12 @@ let array_set (ary : value) i (x : value) =
     //    else raise (IndexOutOfRangeException())
     //| _ -> dontcare()
 
-let array_remove_at (mm : memory_manager) (v : value) i =
-    let ary = v :?> Array
+let array_remove_at (mm : memory_manager) (v : MalValue) i =
+    let ary = v :?> MalArray
     if 0 <= i && i < ary.Count then
         for j = i + 1 to ary.Count - 1 do
             ary.Storage.[j - 1] <- ary.Storage.[j]
-        ary.Storage.[ary.Count - 1] <- Unchecked.defaultof<value>
+        ary.Storage.[ary.Count - 1] <- Unchecked.defaultof<MalValue>
         ary.Count <- ary.Count - 1
     else raise (IndexOutOfRangeException())
     //match v with
@@ -453,10 +453,10 @@ let array_remove_at (mm : memory_manager) (v : value) i =
     //    else raise (IndexOutOfRangeException())
     //| _ -> dontcare()
 
-let array_clear (mm : memory_manager) (v : value) =
-    let ary = v :?> Array
+let array_clear (mm : memory_manager) (v : MalValue) =
+    let ary = v :?> MalArray
     for i = 0 to ary.Count - 1 do
-        ary.Storage.[i] <- Unchecked.defaultof<value>
+        ary.Storage.[i] <- Unchecked.defaultof<MalValue>
     ary.Count <- 0
     //match v with
     //| Varray ary ->
@@ -465,12 +465,12 @@ let array_clear (mm : memory_manager) (v : value) =
     //    ary.count <- 0
     //| _ -> dontcare()
 
-let array_copy (mm : memory_manager) (orig : value) =
-    let orig = orig :?> Array
-    let copy = array_create mm orig.Count :?> Array
+let array_copy (mm : memory_manager) (orig : MalValue) =
+    let orig = orig :?> MalArray
+    let copy = array_create mm orig.Count :?> MalArray
     Array.blit orig.Storage 0 copy.Storage 0 orig.Count
     copy.Count <- orig.Count
-    copy :> value
+    copy :> MalValue
 
     //match orig with
     //| Varray { count = count; storage = storage } ->
@@ -483,30 +483,30 @@ let array_copy (mm : memory_manager) (orig : value) =
     //    | _ -> dontcare()
     //| _ -> dontcare()
 
-let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) (tyenv : tyenv) (touch : HashSet<value>) (ty : Type) (value : value) =
+let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> obj>) (tyenv : tyenv) (touch : HashSet<MalValue>) (ty : Type) (value : MalValue) =
     if touch.Contains(value) then mal_failwith dummy_mm "cyclic value in interop"
     match cache.TryGetValue(ty) with
     | true, f -> f touch value
     | false, _ ->
         let f =
             if ty = typeof<unit> then
-                (fun (touch : HashSet<value>) (value : value) -> box ())
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box ())
             elif ty = typeof<bool> then
-                (fun (touch : HashSet<value>) (value : value) -> box (to_bool value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_bool value))
             elif ty = typeof<int32> then
-                (fun (touch : HashSet<value>) (value : value) -> box (to_int value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_int value))
             elif ty = typeof<char> then
-                (fun (touch : HashSet<value>) (value : value) -> box (to_char value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_char value))
             elif ty = typeof<float> then
-                (fun (touch : HashSet<value>) (value : value) -> box (to_float value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_float value))
             elif ty = typeof<string> then
-                (fun (touch : HashSet<value>) (value : value) -> box (to_string value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_string value))
             elif tyenv.registered_abstract_types.ContainsKey(ty) then
-                (fun (touch : HashSet<value>) (value : value) -> to_obj value)
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> to_obj value)
             elif ty.IsArray then
                 let ty_elem = ty.GetElementType()
-                (fun (touch : HashSet<value>) (value : value) ->
-                    let ary = value :?> Array
+                (fun (touch : HashSet<MalValue>) (value : MalValue) ->
+                    let ary = value :?> MalArray
                     let array = System.Array.CreateInstance(ty_elem, ary.Count)
                     touch.Add(value) |> ignore
                     for i = 0 to ary.Count - 1 do
@@ -525,7 +525,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) 
             elif FSharpType.IsTuple ty then
                 let constr = FSharpValue.PreComputeTupleConstructor(ty)
                 let types = FSharpType.GetTupleElements(ty)
-                (fun (touch : HashSet<value>) (value : value) ->
+                (fun (touch : HashSet<MalValue>) (value : MalValue) ->
                     let fields = get_fields value
                     touch.Add(value) |> ignore
                     let objs = Array.map2 (fun ty field -> obj_of_value cache tyenv touch ty field) types fields
@@ -534,7 +534,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) 
             elif FSharpType.IsRecord ty then
                 let constr = FSharpValue.PreComputeRecordConstructor(ty)
                 let types = Array.map (fun (info : PropertyInfo) -> info.PropertyType) (FSharpType.GetRecordFields(ty))
-                (fun (touch : HashSet<value>) (value : value) ->
+                (fun (touch : HashSet<MalValue>) (value : MalValue) ->
                     let fields = get_fields value
                     touch.Add(value) |> ignore
                     let objs = Array.map2 (fun ty value -> obj_of_value cache tyenv touch ty value) types fields
@@ -544,7 +544,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) 
                 let cases = FSharpType.GetUnionCases(ty)
                 let constrs = Array.map (fun (case : UnionCaseInfo) -> FSharpValue.PreComputeUnionConstructor(case)) cases
                 let case_field_types = Array.map (fun (case : UnionCaseInfo) -> Array.map (fun (prop : PropertyInfo) -> prop.PropertyType) (case.GetFields())) cases
-                (fun (touch : HashSet<value>) (value : value) ->
+                (fun (touch : HashSet<MalValue>) (value : MalValue) ->
                     let tag = get_tag value
                     let types = case_field_types.[tag]
                     let fields = get_fields value
@@ -557,7 +557,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) 
         cache.[ty] <- f
         f touch value
 
-let rec value_of_obj (cache : Dictionary<Type, memory_manager -> obj -> value>) (tyenv : tyenv) (ty : Type) (mm : memory_manager) (obj : obj) =
+let rec value_of_obj (cache : Dictionary<Type, memory_manager -> obj -> MalValue>) (tyenv : tyenv) (ty : Type) (mm : memory_manager) (obj : obj) =
     match cache.TryGetValue(ty) with
     | true, f -> f mm obj
     | false, _ ->
@@ -625,9 +625,9 @@ let rec value_of_obj (cache : Dictionary<Type, memory_manager -> obj -> value>) 
         cache.[ty] <- f
         f mm obj
 
-let touch_create() = HashSet<value>(Misc.PhysicalEqualityComparer)
+let touch_create() = HashSet<MalValue>(Misc.PhysicalEqualityComparer)
 
-let wrap_fsharp_func (tyenv : tyenv) (obj_of_value_cache : Dictionary<Type, HashSet<value> -> value -> obj>) (value_of_obj_cache : Dictionary<Type, memory_manager -> obj -> value>) (ty : Type) (func : obj) =
+let wrap_fsharp_func (tyenv : tyenv) (obj_of_value_cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> obj>) (value_of_obj_cache : Dictionary<Type, memory_manager -> obj -> MalValue>) (ty : Type) (func : obj) =
     let rec flatten ty =
         if FSharpType.IsFunction ty then
             let t1, t2 = FSharpType.GetFunctionElements ty
@@ -641,7 +641,7 @@ let wrap_fsharp_func (tyenv : tyenv) (obj_of_value_cache : Dictionary<Type, Hash
         let methods = typedefof<FSharpFunc<_, _>>.MakeGenericType(tyl.[0], tyl.[1]).GetMethods()
         let invokefast_gen = Array.find (fun (mi : MethodInfo) -> mi.Name = "InvokeFast" && mi.GetParameters().Length = 2 + arity) methods
         invokefast_gen.MakeGenericMethod(Array.sub tyl 2 arity)
-    let func (mm : memory_manager) (argv : value array) =
+    let func (mm : memory_manager) (argv : MalValue array) =
         let touch = touch_create()
         let arg_objs = Array.init arity (fun i -> obj_of_value obj_of_value_cache tyenv touch tyl.[i+1] argv.[i])
         let result_obj =
@@ -649,4 +649,4 @@ let wrap_fsharp_func (tyenv : tyenv) (obj_of_value_cache : Dictionary<Type, Hash
             with :? System.Reflection.TargetInvocationException as exn -> raise exn.InnerException
         value_of_obj value_of_obj_cache tyenv tyl.[tyl.Length - 1] mm result_obj
     //Vfunc (arity, func)
-    Func(arity, func) :> value
+    MalFunc(arity, func) :> MalValue

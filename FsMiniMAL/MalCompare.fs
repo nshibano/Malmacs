@@ -15,14 +15,14 @@ type Mode =
     | Less_equal
     | Greater_equal
 
-type Frame = { a : value; b : value; mutable i : int }
+type Frame = { a : MalValue; b : MalValue; mutable i : int }
 
 let [<Literal>] Uncomparable = 0x80000000
 let [<Literal>] Nan          = 0x80000001
 
 let initial : Frame array = [||]
 
-type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
+type MalCompare(mm : memory_manager, mode : Mode, argv : MalValue array) =
     let mutable accu = 0
     let mutable stack_topidx = -1
     let mutable stack = initial
@@ -37,17 +37,17 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
         stack.[stack_topidx] <- Unchecked.defaultof<Frame>
         stack_topidx <- stack_topidx - 1
 
-    let start (v0 : value) (v1 : value) =
+    let start (v0 : MalValue) (v1 : MalValue) =
         match v0.Kind, v1.Kind with
-        | ValueKind.VKint, ValueKind.VKint ->
-            accu <- compare (v0 :?> Int).Get (v1 :?> Int).Get
-        | ValueKind.VKint, ValueKind.VKblock ->
-            accu <- compare (v0 :?> Int).Get (v1 :?> Block).Tag
-        | ValueKind.VKblock, ValueKind.VKint ->
-            accu <- compare (v0 :?> Block).Tag (v1 :?> Int).Get
-        | ValueKind.VKfloat, ValueKind.VKfloat ->
-            let x0 = (v0 :?> Float).Get
-            let x1 = (v1 :?> Float).Get
+        | MalValueKind.INT, MalValueKind.INT ->
+            accu <- compare (v0 :?> MalInt).Get (v1 :?> MalInt).Get
+        | MalValueKind.INT, MalValueKind.BLOCK ->
+            accu <- compare (v0 :?> MalInt).Get (v1 :?> MalBlock).Tag
+        | MalValueKind.BLOCK, MalValueKind.INT ->
+            accu <- compare (v0 :?> MalBlock).Tag (v1 :?> MalInt).Get
+        | MalValueKind.FLOAT, MalValueKind.FLOAT ->
+            let x0 = (v0 :?> MalFloat).Get
+            let x1 = (v1 :?> MalFloat).Get
             if mode = Compare then
                 accu <- x0.CompareTo(x1)
             else
@@ -55,31 +55,31 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
                     accu <- Nan
                 else
                     accu <- x0.CompareTo(x1)
-        | ValueKind.VKstring, ValueKind.VKstring ->
-            let s0 = (v0 :?> String).Get
-            let s1 = (v1 :?> String).Get
+        | MalValueKind.STRING, MalValueKind.STRING ->
+            let s0 = (v0 :?> MalString).Get
+            let s1 = (v1 :?> MalString).Get
             accu <- Math.Sign(String.CompareOrdinal(s0, s1))
-        | ValueKind.VKblock, ValueKind.VKblock -> 
-            let tag0 = (v0 :?> Block).Tag
-            let tag1 = (v1 :?> Block).Tag
+        | MalValueKind.BLOCK, MalValueKind.BLOCK -> 
+            let tag0 = (v0 :?> MalBlock).Tag
+            let tag1 = (v1 :?> MalBlock).Tag
             let d = compare tag0 tag1
             if d <> 0 then
                 accu <- d
             else
                 stack_push { a = v0; b = v1; i = 0 }
-        | ValueKind.VKarray, ValueKind.VKarray ->
-            let ary0 = v0 :?> Array
-            let ary1 = v1 :?> Array
+        | MalValueKind.ARRAY, MalValueKind.ARRAY ->
+            let ary0 = v0 :?> MalArray
+            let ary1 = v1 :?> MalArray
             let d = compare ary0.Count ary1.Count
             if d <> 0 || ary0.Count = 0  then
                 accu <- d
             else
                 stack_push { a = v0; b = v1; i = 0 }
-        | (ValueKind.VKfunc|ValueKind.VKkfunc|ValueKind.VKpartial|ValueKind.VKclosure|ValueKind.VKcoroutine),
-          (ValueKind.VKfunc|ValueKind.VKkfunc|ValueKind.VKpartial|ValueKind.VKclosure|ValueKind.VKcoroutine) ->
+        | (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE),
+          (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE) ->
             accu <- Uncomparable
             message <- "functional value"
-        | ValueKind.VKobj, ValueKind.VKobj ->
+        | MalValueKind.OBJ, MalValueKind.OBJ ->
             accu <- Uncomparable
             message <- "Uncomparable object"
         | _ -> dontcare()
@@ -91,9 +91,9 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
         while (Environment.TickCount - tickCountAtStart < sliceTicks) && not (isFinished()) do
             let frame = stack.[stack_topidx]
             match frame.a.Kind, frame.b.Kind with
-            | ValueKind.VKblock, ValueKind.VKblock ->
-                let fields0 = (frame.a :?> Block).Fields
-                let fields1 = (frame.b :?> Block).Fields
+            | MalValueKind.BLOCK, MalValueKind.BLOCK ->
+                let fields0 = (frame.a :?> MalBlock).Fields
+                let fields1 = (frame.b :?> MalBlock).Fields
                 if frame.i < fields0.Length - 1 then
                     start fields0.[frame.i] fields1.[frame.i]
                     frame.i <- frame.i + 1
@@ -102,9 +102,9 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
                     // This is required to compare long list which has a length of more than maximum stack depth.
                     stack_discard_top()
                     start fields0.[frame.i] fields1.[frame.i]
-            | ValueKind.VKarray, ValueKind.VKarray ->
-                let ary0 = frame.a :?> Array
-                let ary1 = frame.b :?> Array
+            | MalValueKind.ARRAY, MalValueKind.ARRAY ->
+                let ary0 = frame.a :?> MalArray
+                let ary1 = frame.b :?> MalArray
                 if frame.i < ary0.Count then
                     start ary0.Storage.[frame.i] ary1.Storage.[frame.i]
                     frame.i <- frame.i + 1
@@ -139,7 +139,7 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
 let hash v =
     let mutable limit = 10
 
-    let queue = Queue<value>()        
+    let queue = Queue<MalValue>()        
     queue.Enqueue(v)
 
     let mutable accu = 0
@@ -149,30 +149,30 @@ let hash v =
     while queue.Count > 0 do
         let v = queue.Dequeue()
         match v.Kind with
-        | ValueKind.VKint -> combine (Value.to_int v)
-        | ValueKind.VKfloat -> combine ((Value.to_float v).GetHashCode())
-        | ValueKind.VKstring -> combine ((Value.to_string v).GetHashCode())
-        | ValueKind.VKblock ->
-            let block = v :?> Block
+        | MalValueKind.INT -> combine (Value.to_int v)
+        | MalValueKind.FLOAT -> combine ((Value.to_float v).GetHashCode())
+        | MalValueKind.STRING -> combine ((Value.to_string v).GetHashCode())
+        | MalValueKind.BLOCK ->
+            let block = v :?> MalBlock
             combine block.Tag
             let n = min block.Fields.Length limit
             for i = 0 to n - 1 do
                 queue.Enqueue(block.Fields.[i])
             limit <- limit - n
-        | ValueKind.VKarray ->
-            let ary = v :?> Array
+        | MalValueKind.ARRAY ->
+            let ary = v :?> MalArray
             combine ary.Count
             let n = min ary.Count limit
             for i = 0 to n - 1 do
                 queue.Enqueue(ary.Storage.[i])
             limit <- limit - n
-        | ValueKind.VKfunc
-        | ValueKind.VKkfunc
-        | ValueKind.VKpartial
-        | ValueKind.VKclosure
-        | ValueKind.VKcoroutine
-        | ValueKind.VKobj -> combine (LanguagePrimitives.PhysicalHash v)       
-        | ValueKind.VKvar -> dontcare()
+        | MalValueKind.FUNC
+        | MalValueKind.KFUNC
+        | MalValueKind.PARTIAL
+        | MalValueKind.CLOSURE
+        | MalValueKind.COROUTINE
+        | MalValueKind.OBJ -> combine (LanguagePrimitives.PhysicalHash v)       
+        | MalValueKind.VAR -> dontcare()
         | _ -> dontcare()
 
     accu

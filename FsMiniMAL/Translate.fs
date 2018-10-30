@@ -240,7 +240,7 @@ and expression (alloc : alloc) (tailcall_info : (string * int) option) (se : Syn
             let ue2 = expression alloc None e2
             UEwhile(ue1, ue2)
         | SEtype(e, _) -> expression alloc tailcall_info e
-        | SEformat fmt -> UEconst (Obj(fmt) :> value)
+        | SEformat fmt -> UEconst (MalObj(fmt) :> MalValue)
 
     alloc.End(env_at_begin)
     ue
