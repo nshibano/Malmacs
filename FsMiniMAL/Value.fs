@@ -46,14 +46,18 @@ and MalFloat (x : float) =
     inherit MalValue(MalValueKind.FLOAT)
     member this.Get = x
 
-and MalString (s : string) =
+and MalString (s : string, mm : memory_manager) =
     inherit MalValue(MalValueKind.STRING)
     member x.Get = s
+    override x.Finalize() =
+        Interlocked.Add(&mm.counter, - sizeof_string s.Length) |> ignore
 
 and MalBlock (tag : int, fields : MalValue array, mm : memory_manager) =
     inherit MalValue(MalValueKind.BLOCK)
     member x.Tag = tag
     member x.Fields = fields
+    override x.Finalize() =
+        Interlocked.Add(&mm.counter, - sizeof_block fields.Length) |> ignore
 
 and MalArray (count : int, storage: MalValue array, mm : memory_manager) =
     inherit MalValue(MalValueKind.ARRAY)
@@ -61,6 +65,9 @@ and MalArray (count : int, storage: MalValue array, mm : memory_manager) =
     let mutable storage = storage
     member ary.Count with get() = count and set n = count <- n
     member ary.Storage with get() = storage and set a = storage <- a
+    member ary.MemoryManager = mm
+    override x.Finalize() =
+        Interlocked.Add(&mm.counter, - sizeof_array storage.Length) |> ignore
 
 and MalFunc(arity : int, f : memory_manager -> MalValue array -> MalValue) =
     inherit MalValue(MalValueKind.FUNC)
@@ -238,7 +245,7 @@ let check_free_memory (mm : memory_manager) needed_bytes =
      Volatile.Read(&mm.counter) + needed_bytes < mm.bytes_stop_exec)
 
 let of_int (mm : memory_manager) i =
-    Interlocked.Add(&mm.counter, sizeof_int) |> ignore
+    //Interlocked.Add(&mm.counter, sizeof_int) |> ignore
     //Vint (i, mm)
     MalInt(i) :> MalValue
 
@@ -297,9 +304,9 @@ let to_string (v : MalValue) = (v :?> MalString).Get
     //| _ -> dontcare()
 
 let of_string (mm : memory_manager) (s : string) =
-    //Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
+    Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
     //Vstring (s, mm)
-    MalString(s) :> MalValue
+    MalString(s, mm) :> MalValue
 
 let to_obj (v : MalValue) = (v :?> MalObj).Obj
     //match v with
@@ -309,8 +316,7 @@ let to_obj (v : MalValue) = (v :?> MalObj).Obj
 let of_obj (o : obj) = MalObj(obj) :> MalValue //Vobj o
 
 let block_create (mm : memory_manager) tag (fields : MalValue array) =
-    //Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
-    //Vblock (tag, fields, mm)
+    Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
     MalBlock(tag, fields, mm) :> MalValue
 
 let get_tag (v : MalValue) =
@@ -365,8 +371,7 @@ let array_create (mm : memory_manager) (needed_capacity : int) =
         with :? InvalidOperationException -> mal_raise_Insufficient_memory()
     let bytes = sizeof_array capacity
     if not (check_free_memory mm bytes) then mal_raise_Insufficient_memory()
-    //Interlocked.Add(&mm.counter, bytes) |> ignore
-    //Varray { count = 0; storage = Array.zeroCreate<value> capacity; memory_manager = mm }
+    Interlocked.Add(&mm.counter, bytes) |> ignore
     MalArray(0, Array.zeroCreate<MalValue> capacity, mm) :> MalValue
 
 let array_add (mm : memory_manager) (ary : MalValue) (item : MalValue) =
@@ -383,7 +388,7 @@ let array_add (mm : memory_manager) (ary : MalValue) (item : MalValue) =
             let new_storage = Array.zeroCreate<MalValue> new_capacity
             if not (isNull ary.Storage) then Array.blit ary.Storage 0 new_storage 0 ary.Count
             ary.Storage <- new_storage
-            //Interlocked.Add(&ary.memory_manager.counter, increased_bytes) |> ignore
+            Interlocked.Add(&ary.MemoryManager.counter, increased_bytes) |> ignore
         ary.Storage.[ary.Count] <- item
         ary.Count <- ary.Count + 1
     //| _ -> dontcare()
