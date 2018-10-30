@@ -222,9 +222,12 @@ type private Parser(s : string) =
                 pos <- pos + 1
         buf.ToString()
 
-    let rec parseValue() =
+    let rec parseValue (isRoot : bool) =
         skipWhitespace()
-        match s.[pos] with
+        let c = s.[pos]
+        if isRoot && not (c = '{' || c = '[') then
+            invalidChar()
+        match c with
         | '"' -> Jstring (parseString())
         | '-' -> parseNumber()
         | '{' -> parseObject()
@@ -244,7 +247,7 @@ type private Parser(s : string) =
         if s.[pos] = ']' then
             pos <- pos + 1
         else
-            values.Add(parseValue())
+            values.Add(parseValue false)
             let mutable cont = true
             while cont do
                 skipWhitespace()
@@ -252,7 +255,7 @@ type private Parser(s : string) =
                 | ',' ->
                     pos <- pos + 1
                     skipWhitespace()
-                    values.Add(parseValue())
+                    values.Add(parseValue false)
                 | ']' ->
                     cont <- false
                     pos <- pos + 1
@@ -264,7 +267,7 @@ type private Parser(s : string) =
         skipWhitespace()
         skip ":"
         skipWhitespace()
-        key, parseValue()
+        key, parseValue false
     
     and parseObject() =
         let pairs = ResizeArray()
@@ -290,16 +293,9 @@ type private Parser(s : string) =
         | _ -> invalidChar()
         json.Jobject(pairs.ToArray())
 
-    let parseRootValue() =
-        match s.[pos] with
-        | '{' -> parseObject()
-        | '[' -> parseArray()
-        | _ -> invalidChar()
-
     member x.Parse() =
         try
-            skipWhitespace()
-            let value = parseRootValue()
+            let value = parseValue true
             skipWhitespace()
             if pos < s.Length then invalidChar()
             value
