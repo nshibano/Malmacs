@@ -240,23 +240,23 @@ type private Printer(singleLine : bool) =
         then write "\": "
         else write "\":"
     
-    // Encode characters that are not valid in JS string. The implementation is based
-    // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
     let writeChars(chars : string) =
-        for c in chars do
-            let ci = int c
-            if ci >= 0 && ci <= 7 || ci = 11 || ci >= 14 && ci <= 31 then
-                Printf.bprintf sb "\\u%04x" ci
-            else 
+        for i = 0 to chars.Length - 1 do
+            let c = chars.[i]
+            if c = '"' then
+                write "\\\""
+            elif c = '\\' then
+                write "\\\\"
+            elif '\x20' <= c then
+                sb.Append(c) |> ignore
+            else
                 match c with
                 | '\b' -> write "\\b"
                 | '\t' -> write "\\t"
                 | '\n' -> write "\\n"
                 | '\f' -> write "\\f"
                 | '\r' -> write "\\r"
-                | '"' -> write "\\\""
-                | '\\' -> write "\\\\"
-                | _ -> sb.Append(c) |> ignore
+                | _ -> Printf.bprintf sb "\\u%04x" (int c)
 
     let rec loop (json : json) =
         match json with
