@@ -175,7 +175,7 @@ let tyenv_std, alloc_std, genv_std =
             unit)
 
     add_func "stringLength" (arrow ty_string ty_int) 1 (fun mm argv -> ofInt (to_string argv.[0]).Length)
-    add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (System.String(char (toInt argv.[0]), 1)))
+    add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (String(char (toInt argv.[0]), 1)))
 
     add_func "stringOfCharArray" (arrow (ty_array ty_char) ty_string) 1
         (fun mm argv ->
@@ -183,7 +183,7 @@ let tyenv_std, alloc_std, genv_std =
             let buf = Array.zeroCreate<char> ary.Count
             for i = 0 to ary.Count - 1 do
                 buf.[i] <- char (toInt ary.Storage.[i])
-            of_string mm (System.String(buf)))
+            of_string mm (String(buf)))
 
     add_func "charArrayOfString" (arrow ty_string (ty_array ty_char)) 1
         (fun mm argv ->

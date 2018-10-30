@@ -86,7 +86,7 @@ let escaped_char c =
     | _ ->
         if System.Char.IsControl c
         then sprintf "\\%03d" (int c)
-        else System.String(c, 1)
+        else String(c, 1)
 
 exception InvalidValue
  
@@ -463,7 +463,7 @@ let string_of_node cols node =
     loop 0s 0 false node
 
     let buf = buf.ToArray()
-    let s = System.String(Array.map (fun struct (c, _) -> c) buf)
+    let s = String(Array.map (fun struct (c, _) -> c) buf)
     let colors = Array.map (fun struct (_, color) -> color) buf
     (s, colors)
 

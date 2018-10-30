@@ -3,7 +3,6 @@
 open System
 open System.Collections.Generic
 open System.Text
-open System.Diagnostics
 
 open FsMiniMAL.Lexing
 open Syntax
@@ -109,7 +108,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
         env.[ofs] <-
             match access with
             | Immutable -> value
-            | Mutable -> MalVar(value) :> MalValue // Vvar (ref value)
+            | Mutable -> MalVar(value) :> MalValue
         ofs
 
     let stack_push (code : code) (frame : obj) =
@@ -573,7 +572,6 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                                     state <- State.Failure
                                     send_message (Message.UncatchableException msg)
                         | MalValueKind.COROUTINE ->
-                        //| Vcoroutine (arity, starter) ->
                             let vco = funcval :?> MalCoroutine
                             let arity = vco.Arity
                             let starter = vco.Starter
@@ -603,7 +601,6 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                             else
                                 stack_push UEcoroutine co
                         | MalValueKind.CLOSURE ->
-                        //| Vclosure (arity = arity; env_size = env_size; captures = caps; code = code) ->
                             let closure = funcval :?> MalClosure
                             let arity = closure.Arity
                             // Start evaluation of the closure
