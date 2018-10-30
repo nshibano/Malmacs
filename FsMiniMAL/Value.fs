@@ -105,34 +105,6 @@ and MalObj (obj : obj) =
     inherit MalValue(MalValueKind.OBJ)
     member x.Obj = obj
 
-//type value =
-//    | Vint of int * memory_manager
-//    | Vfloat of float * memory_manager
-//    | Vblock of int * value array * memory_manager
-//    | Varray of malarray
-//    | Vstring of string * memory_manager
-//    | Vfunc of arity : int * func : (memory_manager -> value array -> value)
-//    | Vkfunc of arity : int * kfunc : (memory_manager -> value array -> value array)
-//    | Vcoroutine of arity : int * starter : (memory_manager -> value array -> IMalCoroutine)
-//    | Vclosure of arity : int * env_size : int * captures : value array * code : code
-//    | Vpartial of arity : int * args : value array
-//    | Vvar of value ref
-//    | Vobj of obj
-    
-//    override this.Finalize() =
-//        match this with
-//        | Vint (_, mm) -> Interlocked.Add(&mm.counter, - sizeof_int) |> ignore
-//        | Vfloat (_, mm) -> Interlocked.Add(&mm.counter, - sizeof_float) |> ignore
-//        | Vblock (_, fields, mm) -> Interlocked.Add(&mm.counter, - sizeof_block fields.Length) |> ignore
-//        | Varray ary -> Interlocked.Add(&ary.memory_manager.counter, - sizeof_array ary.storage.Length) |> ignore
-//        | Vstring (s, mm) -> Interlocked.Add(&mm.counter, - sizeof_string s.Length) |> ignore
-//        | _ -> ()
-
-//and malarray =
-//    { mutable count : int
-//      mutable storage : value array
-//      memory_manager : memory_manager }
-
 and IMalCoroutine =
     inherit IDisposable
     abstract member IsFinished : bool
@@ -244,16 +216,9 @@ let check_free_memory (mm : memory_manager) needed_bytes =
     (collect()
      Volatile.Read(&mm.counter) + needed_bytes < mm.bytes_stop_exec)
 
-let of_int (mm : memory_manager) i =
-    //Interlocked.Add(&mm.counter, sizeof_int) |> ignore
-    //Vint (i, mm)
-    MalInt(i) :> MalValue
+let of_int (mm : memory_manager) i = MalInt(i) :> MalValue
 
-let to_int (v : MalValue) =
-    if v.Kind = MalValueKind.INT then
-        (v :?> MalInt).Get
-    else dontcare()
-//    match v with Vint (i, _) -> i | _ -> dontcare()
+let to_int (v : MalValue) = (v :?> MalInt).Get
 
 let of_char (mm : memory_manager) (c : char) = of_int mm (int c)
 
@@ -264,15 +229,9 @@ let to_char (v : MalValue) =
     else
         dontcare()
 
-let of_float (mm : memory_manager) x =
-    //Interlocked.Add(&mm.counter, sizeof_float) |> ignore
-    //Vfloat (x, mm)
-    MalFloat(x) :> MalValue
+let of_float (mm : memory_manager) x = MalFloat(x) :> MalValue
 
-let to_float (v : MalValue) = // match v with Vfloat (x, _) -> x | _ -> dontcare()
-    if v.Kind = MalValueKind.FLOAT then
-        (v :?> MalFloat).Get
-    else dontcare()
+let to_float (v : MalValue) = (v :?> MalFloat).Get
 
 let zero = of_int dummy_mm 0
 let one = of_int dummy_mm 1
@@ -292,26 +251,18 @@ let ``true`` = one
 let of_bool b = if b then ``true`` else ``false``
 
 let to_bool v =
-    to_int v <> 0
-    //match v with
-    //| Vint (0, _) -> false
-    //| Vint (1, _) -> true
-    //| _ -> dontcare()
+    match to_int v with
+    | 0 -> false
+    | 1 -> true
+    | _ -> dontcare()
 
 let to_string (v : MalValue) = (v :?> MalString).Get
-    //match v with
-    //| Vstring (s, _) -> s
-    //| _ -> dontcare()
 
 let of_string (mm : memory_manager) (s : string) =
     Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
-    //Vstring (s, mm)
     MalString(s, mm) :> MalValue
 
 let to_obj (v : MalValue) = (v :?> MalObj).Obj
-    //match v with
-    //| Vobj o -> o
-    //| _ -> dontcare()
 
 let of_obj (o : obj) = MalObj(obj) :> MalValue //Vobj o
 
@@ -320,10 +271,6 @@ let block_create (mm : memory_manager) tag (fields : MalValue array) =
     MalBlock(tag, fields, mm) :> MalValue
 
 let get_tag (v : MalValue) =
-    //match v with
-    //| Vint (i, _) -> i
-    //| Vblock (tag, _, _) -> tag
-    //| _ -> dontcare()
     match v.Kind with
     | MalValueKind.INT -> to_int v
     | MalValueKind.BLOCK -> (v :?> MalBlock).Tag
@@ -332,10 +279,6 @@ let get_tag (v : MalValue) =
 let value_array_empty : MalValue array = [||]
 
 let get_fields (v : MalValue) =
-    //match v with
-    //| Vint _ -> value_array_empty
-    //| Vblock (_, fields, _) -> fields
-    //| _ -> dontcare()
     match v.Kind with
     | MalValueKind.INT -> value_array_empty
     | MalValueKind.BLOCK -> (v :?> MalBlock).Fields
