@@ -234,11 +234,6 @@ type private Printer(singleLine : bool) =
         if not singleLine then
             sb.Append("\r\n") |> ignore
             sb.Append(' ', indent) |> ignore
-
-    let writePropSep() =
-        if not singleLine
-        then write "\": "
-        else write "\":"
     
     let writeChars(chars : string) =
         for i = 0 to chars.Length - 1 do
@@ -280,7 +275,10 @@ type private Printer(singleLine : bool) =
                 writeNewLine()
                 write "\""
                 writeChars k
-                writePropSep()
+                if singleLine then
+                    write "\":"
+                else
+                    write "\": "
                 loop v
             indent <- indent - indentIncr
             writeNewLine()
