@@ -21,14 +21,14 @@ let tyenv_std, alloc_std, genv_std =
         genv.[ofs] <- value
 
     let add_func name ty arity func = add name ty (MalFunc(arity, func) :> MalValue)
-    let add_i name i = add name ty_int (ofInt dummy_mm i)    
-    let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> ofInt mm (f (toInt argv.[0])))
-    let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> ofInt mm (f (toInt argv.[0]) (toInt argv.[1])))
+    let add_i name i = add name ty_int (ofInt i)    
+    let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> ofInt (f (toInt argv.[0])))
+    let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> ofInt (f (toInt argv.[0]) (toInt argv.[1])))
     let add_f name x = add name ty_float (ofFloat dummy_mm x)
     let add_ff name (f : float -> float) = add_func name ty_ff 1 (fun mm argv -> ofFloat mm (f (toFloat argv.[0])))
     let add_fff name (f : float -> float -> float) = add_func name ty_fff 2 (fun mm argv -> ofFloat mm (f (toFloat argv.[0]) (toFloat argv.[1])))
     let add_if name (f : int -> float) = add_func name ty_if 1 (fun mm argv -> ofFloat mm (f (toInt argv.[0])))
-    let add_fi name (f : float -> int) = add_func name ty_fi 1 (fun mm argv -> ofInt mm (f (toFloat argv.[0])))
+    let add_fi name (f : float -> int) = add_func name ty_fi 1 (fun mm argv -> ofInt (f (toFloat argv.[0])))
     let add_vvb name (f : MalValue -> MalValue -> bool) = add_func name ty_vvb 2 (fun mm argv -> of_bool (f argv.[0] argv.[1]))
     let add_uu name (f : MemoryManager -> unit) = add_func name ty_uu 1 (fun mm argv -> f mm; unit)
     
@@ -137,7 +137,7 @@ let tyenv_std, alloc_std, genv_std =
     add_func ".[]<-" ty_array_set 3 array_set_func
     add_func "arraySet" ty_array_set 3 array_set_func
 
-    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> ofInt mm (argv.[0] :?> MalArray).Count)
+    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> ofInt (argv.[0] :?> MalArray).Count)
     add_func "arrayCopy" (arrow (ty_array ty_a) (ty_array ty_a)) 1 (fun mm argv -> array_copy mm argv.[0])
 
     add_func "arraySub" (arrow3 (ty_array ty_a) ty_int ty_int (ty_array ty_a)) 3
@@ -174,7 +174,7 @@ let tyenv_std, alloc_std, genv_std =
                 dst.Storage.[j+k] <- src.Storage.[i+k]
             unit)
 
-    add_func "stringLength" (arrow ty_string ty_int) 1 (fun mm argv -> ofInt mm (to_string argv.[0]).Length)
+    add_func "stringLength" (arrow ty_string ty_int) 1 (fun mm argv -> ofInt (to_string argv.[0]).Length)
     add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (System.String(char (toInt argv.[0]), 1)))
 
     add_func "stringOfCharArray" (arrow (ty_array ty_char) ty_string) 1
@@ -191,7 +191,7 @@ let tyenv_std, alloc_std, genv_std =
             let v = array_create mm s.Length
             let ary = to_malarray v
             for i = 0 to s.Length - 1 do
-                ary.Storage.[i] <- ofInt mm (int s.[i])
+                ary.Storage.[i] <- ofInt (int s.[i])
             ary.Count <- s.Length
             v)
 
@@ -232,7 +232,7 @@ let tyenv_std, alloc_std, genv_std =
             let s = to_string argv.[0]
             let pattern = to_string argv.[1]
             let startIndex = toInt argv.[2]
-            try ofInt mm (s.IndexOf(pattern, startIndex))
+            try ofInt (s.IndexOf(pattern, startIndex))
             with _ -> mal_raise_Invalid_argument())
 
     add_func "pathGetExtension" ty_ss 1
@@ -265,7 +265,7 @@ let tyenv_std, alloc_std, genv_std =
             let process_memory_bytes = int (GC.GetTotalMemory(false))
             let mal_memory_bytes = System.Threading.Volatile.Read(&mm.counter)
             let percent = int (100.0 * float mal_memory_bytes / float mm.bytes_stop_exec)
-            Value.block_create mm 0 [| ofInt mm process_memory_bytes; ofInt mm mal_memory_bytes; ofInt mm percent |])
+            Value.block_create mm 0 [| ofInt process_memory_bytes; ofInt mal_memory_bytes; ofInt percent |])
 
     add_uu "collect" (fun mm -> collect())
 
@@ -286,7 +286,7 @@ let tyenv_std, alloc_std, genv_std =
 
     add_func "intOfChar" (arrow ty_char ty_int) 1 (fun mm argv -> argv.[0])
     add_func "raise" (arrow ty_exn ty_a) 1 (fun mm argv -> raise (MalException argv.[0]))
-    add_func "hash" (arrow ty_a ty_int) 1 (fun mm argv -> ofInt mm (MalCompare.hash argv.[0]))
+    add_func "hash" (arrow ty_a ty_int) 1 (fun mm argv -> ofInt (MalCompare.hash argv.[0]))
 
     let interp = Interpreter(memory_manager_create_default(), tyenv, alloc, genv)
     let src = """

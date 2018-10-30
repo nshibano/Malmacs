@@ -24,7 +24,7 @@ let main argv =
         ary.[0] |> ignore // To keep ary in scope. In release build this changes result.
         float (x1 - x0) / float many
         
-    let sizeof_int = test (fun mm i -> ofInt mm i)
+    let sizeof_int = test (fun mm i -> ofInt i)
     printfn "sizeof int: %.1f" sizeof_int
 
     let sizeof_float = test (fun mm i -> ofFloat mm (float i))    

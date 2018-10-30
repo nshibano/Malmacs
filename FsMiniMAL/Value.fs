@@ -216,11 +216,11 @@ let checkFreeMemory (mm : MemoryManager) neededBytes =
     (collect()
      Volatile.Read(&mm.counter) + neededBytes < mm.bytes_stop_exec)
 
-let ofInt (mm : MemoryManager) i = MalInt(i) :> MalValue
+let ofInt i = MalInt(i) :> MalValue
 
 let toInt (v : MalValue) = (v :?> MalInt).Get
 
-let ofChar (mm : MemoryManager) (c : char) = ofInt mm (int c)
+let ofChar (mm : MemoryManager) (c : char) = ofInt (int c)
 
 let toChar (v : MalValue) =
     let i = toInt v
@@ -233,9 +233,9 @@ let ofFloat (mm : MemoryManager) x = MalFloat(x) :> MalValue
 
 let toFloat (v : MalValue) = (v :?> MalFloat).Get
 
-let zero = ofInt dummy_mm 0
-let one = ofInt dummy_mm 1
-let neg_one = ofInt dummy_mm (-1)
+let zero = ofInt 0
+let one = ofInt 1
+let neg_one = ofInt (-1)
 
 let of_compare n =
     match n with
@@ -294,17 +294,17 @@ exception MalUncatchableException of string
 
 let mal_failwith mm msg = raise (MalException (block_create mm tag_exn_Failure [| of_string mm msg |]))
 
-let mal_Division_by_zero = ofInt dummy_mm tag_exn_Division_by_zero
-let mal_raise_Division_by_zero () = raise (MalException mal_Division_by_zero)
+let mal_Division_by_zero = ofInt tag_exn_Division_by_zero
+let mal_raise_Division_by_zero() = raise (MalException mal_Division_by_zero)
 
-let mal_Index_out_of_range = ofInt dummy_mm tag_exn_Index_out_of_range
-let mal_raise_Index_out_of_range () = raise (MalException mal_Index_out_of_range)
+let mal_Index_out_of_range = ofInt tag_exn_Index_out_of_range
+let mal_raise_Index_out_of_range() = raise (MalException mal_Index_out_of_range)
 
-let mal_Invalid_argument = ofInt dummy_mm tag_exn_Invalid_argument
-let mal_raise_Invalid_argument () = raise (MalException mal_Invalid_argument)
+let mal_Invalid_argument = ofInt tag_exn_Invalid_argument
+let mal_raise_Invalid_argument() = raise (MalException mal_Invalid_argument)
 
-let mal_Match_failure = ofInt dummy_mm tag_exn_Match_failure
-let mal_raise_Match_failure () = raise (MalException mal_Match_failure)
+let mal_Match_failure = ofInt tag_exn_Match_failure
+let mal_raise_Match_failure() = raise (MalException mal_Match_failure)
 
 let mal_raise_Insufficient_memory() = raise (MalUncatchableException "Insufficient memory")
 
@@ -515,7 +515,7 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
             elif ty = typeof<bool> then
                 (fun (mm : MemoryManager) (obj : obj) -> of_bool (obj :?> bool))
             elif ty = typeof<int32> then
-                (fun (mm : MemoryManager) (obj : obj) -> ofInt mm (obj :?> int32))
+                (fun (mm : MemoryManager) (obj : obj) -> ofInt (obj :?> int32))
             elif ty = typeof<char> then
                 (fun (mm : MemoryManager) (obj : obj) -> ofChar mm (obj :?> char))
             elif ty = typeof<float> then
@@ -556,7 +556,7 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
                         let fields = case.GetFields()
                         if fields.Length = 0 then
                             (fun (mm : MemoryManager) (obj : obj) ->
-                                ofInt mm i)
+                                ofInt i)
                         else
                             let field_types = Array.map (fun (field : PropertyInfo) -> field.PropertyType) fields
                             let case_reader = FSharpValue.PreComputeUnionReader(case)

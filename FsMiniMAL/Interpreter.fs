@@ -232,9 +232,9 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                         else
                             match MalLex.Exec alphabets dfa source scan_start_pos with
                             | Some (end_pos, action_idx, eof) ->
-                                lexbuf_fields.[1] <- ofInt mm scan_start_pos
-                                lexbuf_fields.[2] <- ofInt mm end_pos
-                                lexbuf_fields.[3] <- ofInt mm end_pos
+                                lexbuf_fields.[1] <- ofInt scan_start_pos
+                                lexbuf_fields.[2] <- ofInt end_pos
+                                lexbuf_fields.[3] <- ofInt end_pos
                                 lexbuf_fields.[4] <- of_bool eof
                                 Array.append [| closures.[action_idx] |] (Array.sub frame 2 (frame.Length - 2))
                             | None ->
@@ -802,17 +802,17 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     frame.j <- toInt accu
                     if dir = dirflag.Upto && frame.i <= frame.j then
                         frame.pc <- Tag.Forloop_To
-                        env.[ofs] <- ofInt mm frame.i
+                        env.[ofs] <- ofInt frame.i
                         start_code body
                     elif dir = dirflag.Downto && frame.i >= frame.j then
                         frame.pc <- Tag.Forloop_Downto
-                        env.[ofs] <- ofInt mm frame.i
+                        env.[ofs] <- ofInt frame.i
                         start_code body
                     else stack_discard_top()
                 | Tag.Forloop_To ->
                     if frame.i < frame.j then
                         frame.i <- frame.i + 1
-                        env.[ofs] <- ofInt mm frame.i
+                        env.[ofs] <- ofInt frame.i
                         start_code body
                     else
                         accu <- unit
@@ -820,7 +820,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                 | Tag.Forloop_Downto ->
                     if frame.i > frame.j then
                         frame.i <- frame.i - 1
-                        env.[ofs] <- ofInt mm frame.i
+                        env.[ofs] <- ofInt frame.i
                         start_code body
                     else
                         accu <- unit
