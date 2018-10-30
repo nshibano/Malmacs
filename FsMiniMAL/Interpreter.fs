@@ -109,7 +109,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
         env.[ofs] <-
             match access with
             | Immutable -> value
-            | Mutable -> Vvar (ref value)
+            | Mutable -> Var(value) :> value // Vvar (ref value)
         ofs
 
     let stack_push (code : code) (frame : obj) =
@@ -151,10 +151,9 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
         let new_values = List.map (fun (name, info) ->
             let var_info = alloc.Get(name)
             let value =
-                match env.[var_info.ofs], var_info.access with
-                | (Vvar v) as r, Mutable -> r
-                | _, Mutable -> dontcare()
-                | x, Immutable -> x
+                match var_info.access with
+                | Immutable -> env.[var_info.ofs]
+                | Mutable -> (env.[var_info.ofs] :?> Var).Content
             (name, value, info)) new_values
         send_message (Message.NewValues (tyenv, new_values))
     
@@ -165,36 +164,36 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
         | UEgetenv ofs ->
             accu <- env.[ofs]
         | UEgetenvvar ofs ->
-            match env.[ofs] with
-            | Vvar r -> accu <- !r
-            | _ -> dontcare()
+            accu <- (env.[ofs] :?> Var).Content
+            //match env.[ofs] with
+            //| Vvar r -> accu <- !r
+            //| _ -> dontcare()
         | UEgetcap ofs ->
             accu <- captures.[ofs]
         | UEgetcapvar ofs ->
-            match captures.[ofs] with
-            | Vvar r -> accu <- !r
-            | _ -> dontcare()
+            accu <- (captures.[ofs] :?> Var).Content
+            //match captures.[ofs] with
+            //| Vvar r -> accu <- !r
+            //| _ -> dontcare()
         | UEfn (env_size, argc, is_capture_flags, ofss, body) ->
             let capture_values = Array.zeroCreate<value> is_capture_flags.Length
             for i = 0 to is_capture_flags.Length - 1 do
                 let ofs = ofss.[i]
                 capture_values.[i] <- if is_capture_flags.[i] then captures.[ofs] else env.[ofs] 
-            accu <- Vclosure (captures = capture_values, arity = argc, env_size = env_size, code = body)
+            accu <- Closure(argc, env_size, capture_values, body) //captures = capture_values, arity = argc, env_size = env_size, code = body)
         | UCfun defs ->
             // Doing this in two steps because recursive function captures itself from env.
             // Step 1: create closures with captures unfilled, and set it to env.
             for ofs, fn in defs do
                 match fn with
                 | UEfn (env_size, argc, is_capture_flags, _, body) ->
-                    env.[ofs] <- Vclosure (captures = Array.zeroCreate<value> is_capture_flags.Length,
-                                           arity = argc,
-                                           env_size = env_size,
-                                           code = body)
+                    env.[ofs] <- Closure(argc, env_size, Array.zeroCreate<value> is_capture_flags.Length, body) :> value
                 | _ -> dontcare()
             // Step 2: fill captures.
             for ofs, fn in defs do
-                match fn, env.[ofs] with
-                | UEfn (is_capture_flags = is_capture_flags; ofss = ofss), Vclosure (captures = capture_values) ->
+                match fn with
+                | UEfn (is_capture_flags = is_capture_flags; ofss = ofss) ->
+                    let capture_values = (env.[ofs] :?> Closure).Captures
                     for i = 0 to is_capture_flags.Length - 1 do
                         let ofs = ofss.[i]
                         capture_values.[i] <- if is_capture_flags.[i] then captures.[ofs] else env.[ofs]
@@ -222,7 +221,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     let closures = Array.zeroCreate<value> codes.Length
                     let lexer_obj : int * HashSet<int> * DfaNode * value array = (arity, alphabets, dfa, closures)
                     let lexing2 (mm : memory_manager) (frame : value array) =
-                        let arity, alphabets, dfa, closures = match frame.[1] with Vobj o -> o :?>  int * HashSet<int> * DfaNode * value array | _ -> dontcare()
+                        let arity, alphabets, dfa, closures = (frame.[1] :?> Obj).Obj :?>  int * HashSet<int> * DfaNode * value array
                         let lexbuf = frame.[2 + arity - 1]
                         let lexbuf_fields = get_fields lexbuf
                         let source = to_string lexbuf_fields.[0]
@@ -240,8 +239,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                                 Array.append [| closures.[action_idx] |] (Array.sub frame 2 (frame.Length - 2))
                             | None ->
                                 mal_raise_Match_failure ()
-                    let partial = Vpartial (arity, [| Vkfunc (0, lexing2); Vobj lexer_obj |])
-                    env.[ofs] <- partial
+                    env.[ofs] <- Partial(arity, [| KFunc (0, lexing2); Obj(lexer_obj) |]) :> value
                     (codes, closures)) defs
             // Step 2
             for codes, closures in actionss do
@@ -252,7 +250,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                         for j = 0 to is_capture_flags.Length - 1 do
                             let ofs = ofss.[j]
                             capture_values.[j] <- if is_capture_flags.[j] then captures.[ofs] else env.[ofs]
-                        closures.[i] <- Vclosure (arity, env_size, capture_values, code)
+                        closures.[i] <- Closure(arity, env_size, capture_values, code) :> value
                     | _ -> dontcare()
             tyenv <- tyenv'
             alloc <- alloc'
@@ -335,7 +333,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     state <- State.Running
         
     let rec do_match (bind : bool) (p : pattern) (x : value) =
-        match p, x with
+        match p, x.Kind with
         | UPid ofs, _ ->
             if bind then env.[ofs] <- x
             true
@@ -343,20 +341,22 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
             if bind then env.[ofs] <- x
             do_match bind p x
         | UPor (p1, p2), _ -> do_match bind p1 x || do_match bind p2 x
-        | UPint i1, Vint (i2, _) -> i1 = i2
-        | UPfloat x1, Vfloat (x2, _) -> x1 = x2
-        | UPstring s1, Vstring (s2, _) -> s1 = s2
-        | UPblock (pattag, patl), Vblock (tag, fields, _) ->
-            if pattag = tag && patl.Length = fields.Length then
+        | UPint i1, ValueKind.VKint -> i1 = (x :?> Int).Get
+        | UPfloat x1, ValueKind.VKfloat -> x1 = (x :?> Float).Get
+        | UPstring s1, ValueKind.VKstring -> s1 = (x :?> String).Get
+        | UPblock (pattag, patl), ValueKind.VKblock ->
+            let block = x :?> Block
+            if pattag = block.Tag && patl.Length = block.Fields.Length then
                 let mutable cont = true
                 let mutable i = 0
                 while cont && i < patl.Length do
-                    cont <- do_match bind patl.[i] fields.[i]
+                    cont <- do_match bind patl.[i] block.Fields.[i]
                     i <- i + 1
                 cont
             else false
-        | UParray patl, Varray { count = ary_count } ->
-            if patl.Length = ary_count then
+        | UParray patl, ValueKind.VKarray ->
+            let ary = x :?> Array
+            if patl.Length = ary.Count then
                 let mutable cont = true
                 let mutable i = 0
                 while cont && i < patl.Length do
@@ -365,8 +365,8 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                 cont
             else false
         | UPany, _ -> true
-        | UPint _, Vblock _
-        | UPblock _, Vint _ -> false
+        | UPint _, ValueKind.VKblock
+        | UPblock _, ValueKind.VKint -> false
         | _ -> dontcare()
     
     let do_raise (exn_value : value) =
@@ -460,11 +460,13 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     start_code orig_expr
                 | Tag.BlockWith_EvalOrig ->
                     frame.pc <- Tag.BlockWith_EvalSets
-                    match accu with
-                    | Vblock (tag, fields, _) ->
-                        frame.tag <- tag
-                        frame.fields <- Array.copy fields
-                    | _ -> dontcare()
+                    frame.tag <- (accu :?> Block).Tag
+                    frame.fields <- Array.copy ((accu :?> Block).Fields)
+                    //match accu with
+                    //| Vblock (tag, fields, _) ->
+                    //    frame.tag <- tag
+                    //    frame.fields <- Array.copy fields
+                    //| _ -> dontcare()
                     start_code exprl.[0]
                 | Tag.BlockWith_EvalSets ->
                     frame.fields.[idxl.[frame.i]] <- accu
@@ -496,40 +498,46 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     // The function is at frame.values.[frame.i]. The function can be Vfunc, Vkfunc, Vclosure, Vpartial or Vcoroutine.
                     // The first argument is frame.values.[frame.i + 1].
                     // The last argument is frame.values.[frame.values.Length - 1].
+                    let funcval = frame.values.[frame.i]
                     let arity =
-                        match frame.values.[frame.i] with
-                        | Vclosure (arity = arity)
-                        | Vfunc (arity, _)
-                        | Vkfunc (arity, _)
-                        | Vpartial (arity, _)
-                        | Vcoroutine (arity, _) -> arity
+                        match funcval.Kind with
+                        | ValueKind.VKclosure -> (funcval :?> Closure).Arity
+                        | ValueKind.VKfunc -> (funcval :?> Func).Arity
+                        | ValueKind.VKkfunc -> (funcval :?> KFunc).Arity
+                        | ValueKind.VKpartial -> (funcval :?> Partial).Arity
+                        | ValueKind.VKcoroutine -> (funcval :?> Coroutine).Arity
                         | _ -> dontcare()
                     let argc = frame.values.Length - frame.i - 1
                     if argc < arity then
-                        accu <- Vpartial (arity - argc, Array.sub frame.values frame.i (frame.values.Length - frame.i))
+                        accu <- Partial(arity - argc, Array.sub frame.values frame.i (frame.values.Length - frame.i))
                         stack_discard_top()
                     else
                         // if function is partial, expand it into frame.values.
-                        match frame.values.[frame.i] with
-                        | Vpartial _ ->
+                        if funcval.Kind = ValueKind.VKpartial then
                             let rec partial_length_loop (v : value) =
-                                match v with
-                                | Vpartial (_, values) ->
-                                    partial_length_loop values.[0] + values.Length - 1
-                                | Vclosure _ | Vfunc _ | Vkfunc _ -> 1
+                                match v.Kind with
+                                | ValueKind.VKpartial ->
+                                    let args = (v :?> Partial).Args
+                                    partial_length_loop args.[0] + args.Length - 1
+                                | ValueKind.VKclosure
+                                | ValueKind.VKfunc
+                                | ValueKind.VKkfunc
+                                | ValueKind.VKcoroutine -> 1
                                 | _ -> dontcare()
                             let partial_length = partial_length_loop frame.values.[frame.i]
                             let ary = Array.zeroCreate<value> (partial_length + frame.values.Length - frame.i - 1)
                             let rec expand_loop ary (v : value) =
-                                match v with
-                                | Vpartial (_, values) ->
-                                    let ofs = expand_loop ary values.[0]
-                                    let n = values.Length - 1
-                                    Array.blit values 1 ary ofs n
+                                match v.Kind with
+                                | ValueKind.VKpartial ->
+                                    let args = (v :?> Partial).Args
+                                    let ofs = expand_loop ary args.[0]
+                                    let n = args.Length - 1
+                                    Array.blit args 1 ary ofs n
                                     ofs + n
-                                | Vfunc _
-                                | Vkfunc _
-                                | Vclosure _ ->
+                                | ValueKind.VKclosure
+                                | ValueKind.VKfunc
+                                | ValueKind.VKkfunc
+                                | ValueKind.VKcoroutine ->
                                     ary.[0] <- v
                                     1
                                 | _ -> dontcare()
@@ -537,18 +545,19 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                             Array.blit frame.values (frame.i + 1) ary ofs (frame.values.Length - frame.i - 1)
                             frame.values <- ary
                             frame.i <- 0
-                        | _ -> ()
                         // call actual function
-                        match frame.values.[frame.i] with
-                        | Vfunc (arity, f) ->
-                            let argv = Array.sub frame.values (frame.i + 1) arity
+                        let funcval = frame.values.[frame.i]
+                        match funcval.Kind with
+                        | ValueKind.VKfunc ->
+                            let func = funcval :?> Func
+                            let argv = Array.sub frame.values (frame.i + 1) func.Arity
                             try
-                                let result = f mm argv
-                                if frame.i + 1 + arity = frame.values.Length then
+                                let result = func.F mm argv
+                                if frame.i + 1 + func.Arity = frame.values.Length then
                                     accu <- result
                                     stack_discard_top()
                                 else
-                                    let j = frame.i + arity
+                                    let j = frame.i + func.Arity
                                     for k = frame.i to j - 1 do
                                         frame.values.[k] <- Unchecked.defaultof<value>
                                     frame.i <- j
@@ -558,10 +567,11 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                                 | MalUncatchableException msg ->
                                     state <- State.Failure
                                     send_message (Message.UncatchableException msg)
-                        | Vkfunc (_, kf) ->
+                        | ValueKind.VKkfunc ->
+                            let kfunc = funcval :?> KFunc
                             let frame_values = Array.sub frame.values frame.i (frame.values.Length - frame.i)
                             try
-                                let result = kf mm frame_values
+                                let result = kfunc.F mm frame_values
                                 if result.Length = 1 then
                                     accu <- result.[0]
                                     stack_discard_top()
@@ -573,7 +583,11 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                                 | MalUncatchableException msg ->
                                     state <- State.Failure
                                     send_message (Message.UncatchableException msg)
-                        | Vcoroutine (arity, starter) ->
+                        | ValueKind.VKcoroutine ->
+                        //| Vcoroutine (arity, starter) ->
+                            let vco = funcval :?> Coroutine
+                            let arity = vco.Arity
+                            let starter = vco.Starter
                             let argv = Array.sub frame.values (frame.i + 1) arity
                             let co = starter mm argv
                             let j = frame.i + 1 + arity
@@ -599,12 +613,15 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                                         send_message (Message.UncatchableException msg)
                             else
                                 stack_push UEcoroutine co
-                        | Vclosure (arity = arity; env_size = env_size; captures = caps; code = code) ->
+                        | ValueKind.VKclosure ->
+                        //| Vclosure (arity = arity; env_size = env_size; captures = caps; code = code) ->
+                            let closure = funcval :?> Closure
+                            let arity = closure.Arity
                             // Start evaluation of the closure
                             frame.oldenv <- env
                             frame.oldcaptures <- captures
-                            env <- Array.zeroCreate<value> env_size
-                            captures <- caps
+                            env <- Array.zeroCreate<value> closure.EnvSize
+                            captures <- closure.Captures
                             for j = 0 to arity - 1 do
                                 env.[j] <- frame.values.[frame.i + 1 + j]
                             let n = frame.i + 1 + arity
@@ -612,8 +629,8 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                                 frame.values.[m] <- Unchecked.defaultof<value>
                             frame.pc <- Tag.Apply_Closure
                             frame.i <- n
-                            frame.calling_code <- code
-                            start_code code
+                            frame.calling_code <- closure.Code
+                            start_code closure.Code
                         | _ -> dontcare()
                 | Tag.Apply_Closure ->
                     if frame.i = frame.values.Length then
@@ -758,9 +775,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     frame := Tag.Setenvvar_Eval
                     start_code code
                 | Tag.Setenvvar_Eval ->
-                    match env.[ofs] with
-                    | Vvar r -> r := accu
-                    | _ -> dontcare()
+                    (env.[ofs] :?> Var).Content <- accu
                     stack_discard_top()
                 | _ -> dontcare()
             | UEsetcapvar (ofs, code) ->
@@ -770,9 +785,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     frame := Tag.Setcapturevar_Eval
                     start_code code
                 | Tag.Setcapturevar_Eval ->
-                    match captures.[ofs] with
-                    | Vvar r -> r := accu
-                    | _ -> dontcare()
+                    (captures.[ofs] :?> Var).Content <- accu
                     stack_discard_top()
                 | _ -> dontcare()
             | UEfor (ofs, first, dir, last, body) ->
@@ -856,7 +869,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
                     frame.pc <- Tag.Var_Eval
                     start_code (snd defs.[0])
                 | Tag.Var_Eval ->
-                    env.[fst defs.[frame.i]] <- Vvar (ref accu)
+                    env.[fst defs.[frame.i]] <- Var(accu) :> value
                     frame.i <- frame.i + 1
                     if frame.i < defs.Length then
                         start_code (snd defs.[frame.i])
@@ -1011,22 +1024,19 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
         let ty = Types.typeexpr_of_type tyenv (Dictionary()) [] typeof<'T>
         set name v ty Mutable
 
-    member this.GetVar(name : string) : value ref =
+    member this.GetVar(name : string) : Var =
         clear()
         let { ofs = ofs; access = access } = alloc.Get(name)
         match access with
         | Immutable -> dontcare()
-        | Mutable ->
-            match env.[ofs] with
-            | Vvar r -> r
-            | _ -> dontcare()
+        | Mutable -> env.[ofs] :?> Var
 
     member this.GetValue(name : string) : value =
         clear()
         let { ofs = ofs; access = access } = alloc.Get(name)
         match access with
         | Immutable -> env.[ofs]
-        | Mutable -> match env.[ofs] with Vvar r -> !r | _ -> dontcare()
+        | Mutable -> (env.[ofs] :?> Var).Content
 
     member this.Get<'T>(name : string) =
         let value = this.GetValue(name)
@@ -1035,10 +1045,8 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : value 
     
     member this.GetFromOfs<'T>(ofs : int) =
         clear()
-        let value =
-            match env.[ofs] with
-            | Vvar r -> !r
-            | v -> v
+        let value = env.[ofs]
+        let value = if value.Kind = ValueKind.VKvar then (value :?> Var).Content else value
         let obj = Value.obj_of_value obj_of_value_cache tyenv (touch_create()) typeof<'T> value
         obj :?> 'T
 

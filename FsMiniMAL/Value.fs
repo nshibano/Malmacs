@@ -17,28 +17,109 @@ let sizeof_block len = block_overhead + value_array_increment * len
 let sizeof_array cap = array_overhead + value_array_increment * cap
 let sizeof_string len = string_overhead + string_increment * len
 
-type value =
-    | Vint of int * memory_manager
-    | Vfloat of float * memory_manager
-    | Vblock of int * value array * memory_manager
-    | Varray of malarray
-    | Vstring of string * memory_manager
-    | Vfunc of arity : int * func : (memory_manager -> value array -> value)
-    | Vkfunc of arity : int * kfunc : (memory_manager -> value array -> value array)
-    | Vcoroutine of arity : int * starter : (memory_manager -> value array -> IMalCoroutine)
-    | Vclosure of arity : int * env_size : int * captures : value array * code : code
-    | Vpartial of arity : int * args : value array
-    | Vvar of value ref
-    | Vobj of obj
+// The value type is defined as regular class (not discriminated unions) to
+// allow only some kind of them have overridden Finalize method.
+// Doing so minimizes number of objects which goes to "finalizer queue" of CLR runtime.
+
+type ValueKind =
+    | VKint = 0
+    | VKfloat = 1
+    | VKstring = 2
+    | VKblock = 3
+    | VKarray = 4
+    | VKpartial = 5
+    | VKclosure = 6
+    | VKfunc = 7
+    | VKkfunc = 8
+    | VKcoroutine = 9
+    | VKvar = 10
+    | VKobj = 11
+
+type value (kind : ValueKind) =
+    member x.Kind = kind
+
+and Int (i : int) =
+    inherit value(ValueKind.VKint)
+    member x.Get = i
+
+and Float (x : float) =
+    inherit value(ValueKind.VKfloat)
+    member this.Get = x
+
+and String (s : string) =
+    inherit value(ValueKind.VKstring)
+    member x.Get = s
+
+and Block (tag : int, fields : value array, mm : memory_manager) =
+    inherit value(ValueKind.VKblock)
+    member x.Tag = tag
+    member x.Fields = fields
+
+and Array (count : int, storage: value array, mm : memory_manager) =
+    inherit value(ValueKind.VKarray)
+    let mutable count = count
+    let mutable storage = storage
+    member ary.Count with get() = count and set n = count <- n
+    member ary.Storage with get() = storage and set a = storage <- a
+
+and Func(arity : int, f : memory_manager -> value array -> value) =
+    inherit value(ValueKind.VKfunc)
+    member x.Arity = arity
+    member x.F = f
+
+and KFunc(arity : int, f : memory_manager -> value array -> value array) =
+    inherit value(ValueKind.VKkfunc)
+    member x.Arity = arity
+    member x.F = f
+
+and Coroutine(arity : int, starter : memory_manager -> value array -> IMalCoroutine) =
+    inherit value(ValueKind.VKcoroutine)
+    member x.Arity = arity
+    member x.Starter = starter
+
+and Closure(arity : int, envSize : int, captures : value array, code : code) =
+    inherit value(ValueKind.VKclosure)
+    member x.Arity = arity
+    member x.EnvSize = envSize
+    member x.Captures = captures
+    member x.Code = code
+
+and Partial (arity : int, args : value array) =
+    inherit value(ValueKind.VKpartial)
+    member x.Arity = arity
+    member x.Args = args
+
+and Var (value : value) =
+    inherit value(ValueKind.VKvar)
+    let mutable content = value
+    member var.Content with get() = content and set x = content <- x
+
+and Obj (obj : obj) =
+    inherit value(ValueKind.VKobj)
+    member x.Obj = obj
+
+//type value =
+//    | Vint of int * memory_manager
+//    | Vfloat of float * memory_manager
+//    | Vblock of int * value array * memory_manager
+//    | Varray of malarray
+//    | Vstring of string * memory_manager
+//    | Vfunc of arity : int * func : (memory_manager -> value array -> value)
+//    | Vkfunc of arity : int * kfunc : (memory_manager -> value array -> value array)
+//    | Vcoroutine of arity : int * starter : (memory_manager -> value array -> IMalCoroutine)
+//    | Vclosure of arity : int * env_size : int * captures : value array * code : code
+//    | Vpartial of arity : int * args : value array
+//    | Vvar of value ref
+//    | Vobj of obj
     
-    override this.Finalize() =
-        match this with
-        | Vint (_, mm) -> Interlocked.Add(&mm.counter, - sizeof_int) |> ignore
-        | Vfloat (_, mm) -> Interlocked.Add(&mm.counter, - sizeof_float) |> ignore
-        | Vblock (_, fields, mm) -> Interlocked.Add(&mm.counter, - sizeof_block fields.Length) |> ignore
-        | Varray ary -> Interlocked.Add(&ary.memory_manager.counter, - sizeof_array ary.storage.Length) |> ignore
-        | Vstring (s, mm) -> Interlocked.Add(&mm.counter, - sizeof_string s.Length) |> ignore
-        | _ -> ()
+//    override this.Finalize() =
+//        match this with
+//        | Vint (_, mm) -> Interlocked.Add(&mm.counter, - sizeof_int) |> ignore
+//        | Vfloat (_, mm) -> Interlocked.Add(&mm.counter, - sizeof_float) |> ignore
+//        | Vblock (_, fields, mm) -> Interlocked.Add(&mm.counter, - sizeof_block fields.Length) |> ignore
+//        | Varray ary -> Interlocked.Add(&ary.memory_manager.counter, - sizeof_array ary.storage.Length) |> ignore
+//        | Vstring (s, mm) -> Interlocked.Add(&mm.counter, - sizeof_string s.Length) |> ignore
+//        | _ -> ()
 
 and malarray =
     { mutable count : int
@@ -158,9 +239,14 @@ let check_free_memory (mm : memory_manager) needed_bytes =
 
 let of_int (mm : memory_manager) i =
     Interlocked.Add(&mm.counter, sizeof_int) |> ignore
-    Vint (i, mm)
+    //Vint (i, mm)
+    Int(i) :> value
 
-let to_int v = match v with Vint (i, _) -> i | _ -> dontcare()
+let to_int (v : value) =
+    if v.Kind = ValueKind.VKint then
+        (v :?> Int).Get
+    else dontcare()
+//    match v with Vint (i, _) -> i | _ -> dontcare()
 
 let of_char (mm : memory_manager) (c : char) = of_int mm (int c)
 
@@ -172,10 +258,14 @@ let to_char (v : value) =
         dontcare()
 
 let of_float (mm : memory_manager) x =
-    Interlocked.Add(&mm.counter, sizeof_float) |> ignore
-    Vfloat (x, mm)
+    //Interlocked.Add(&mm.counter, sizeof_float) |> ignore
+    //Vfloat (x, mm)
+    Float(x) :> value
 
-let to_float v = match v with Vfloat (x, _) -> x | _ -> dontcare()
+let to_float (v : value) = // match v with Vfloat (x, _) -> x | _ -> dontcare()
+    if v.Kind = ValueKind.VKfloat then
+        (v :?> Float).Get
+    else dontcare()
 
 let zero = of_int dummy_mm 0
 let one = of_int dummy_mm 1
@@ -195,49 +285,60 @@ let ``true`` = one
 let of_bool b = if b then ``true`` else ``false``
 
 let to_bool v =
-    match v with
-    | Vint (0, _) -> false
-    | Vint (1, _) -> true
-    | _ -> dontcare()
+    to_int v <> 0
+    //match v with
+    //| Vint (0, _) -> false
+    //| Vint (1, _) -> true
+    //| _ -> dontcare()
 
-let to_string v =
-    match v with
-    | Vstring (s, _) -> s
-    | _ -> dontcare()
+let to_string (v : value) = (v :?> String).Get
+    //match v with
+    //| Vstring (s, _) -> s
+    //| _ -> dontcare()
 
 let of_string (mm : memory_manager) (s : string) =
-    Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
-    Vstring (s, mm)
+    //Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
+    //Vstring (s, mm)
+    String(s) :> value
 
-let to_obj v =
-    match v with
-    | Vobj o -> o
-    | _ -> dontcare()
+let to_obj (v : value) = (v :?> Obj).Obj
+    //match v with
+    //| Vobj o -> o
+    //| _ -> dontcare()
 
-let of_obj o = Vobj o
+let of_obj (o : obj) = Obj(obj) :> value //Vobj o
 
 let block_create (mm : memory_manager) tag (fields : value array) =
-    Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
-    Vblock (tag, fields, mm)
+    //Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
+    //Vblock (tag, fields, mm)
+    Block(tag, fields, mm) :> value
 
 let get_tag (v : value) =
-    match v with
-    | Vint (i, _) -> i
-    | Vblock (tag, _, _) -> tag
+    //match v with
+    //| Vint (i, _) -> i
+    //| Vblock (tag, _, _) -> tag
+    //| _ -> dontcare()
+    match v.Kind with
+    | ValueKind.VKint -> to_int v
+    | ValueKind.VKblock -> (v :?> Block).Tag
     | _ -> dontcare()
 
 let value_array_empty : value array = [||]
 
 let get_fields (v : value) =
-    match v with
-    | Vint _ -> value_array_empty
-    | Vblock (_, fields, _) -> fields
+    //match v with
+    //| Vint _ -> value_array_empty
+    //| Vblock (_, fields, _) -> fields
+    //| _ -> dontcare()
+    match v.Kind with
+    | ValueKind.VKint -> value_array_empty
+    | ValueKind.VKblock -> (v :?> Block).Fields
     | _ -> dontcare()
 
-let to_malarray (v : value) =
-    match v with
-    | Varray malary -> malary
-    | _ -> dontcare()
+let to_malarray (v : value) = v :?> Array
+    //match v with
+    //| Varray malary -> malary
+    //| _ -> dontcare()
 
 exception MalException of value
 exception MalUncatchableException of string
@@ -264,87 +365,123 @@ let array_create (mm : memory_manager) (needed_capacity : int) =
         with :? InvalidOperationException -> mal_raise_Insufficient_memory()
     let bytes = sizeof_array capacity
     if not (check_free_memory mm bytes) then mal_raise_Insufficient_memory()
-    Interlocked.Add(&mm.counter, bytes) |> ignore
-    Varray { count = 0; storage = Array.zeroCreate<value> capacity; memory_manager = mm }
+    //Interlocked.Add(&mm.counter, bytes) |> ignore
+    //Varray { count = 0; storage = Array.zeroCreate<value> capacity; memory_manager = mm }
+    Array(0, Array.zeroCreate<value> capacity, mm) :> value
 
 let array_add (mm : memory_manager) (ary : value) (item : value) =
-    match ary with  
-    | Varray ({ count = count; storage = storage } as ary) ->
-        let capacity = if isNull storage then 0 else storage.Length
-        if capacity < count + 1 then
+        let ary = ary :?> Array
+    //match ary with  
+    //| Varray ({ count = count; storage = storage } as ary) ->
+        let capacity = ary.Storage.Length //if isNull ary.Storage then 0 else storage.Length
+        if capacity < ary.Count + 1 then
             let new_capacity =
-                try find_next_capacity_exn mm.maximum_array_length (count + 1)
+                try find_next_capacity_exn mm.maximum_array_length (ary.Count + 1)
                 with :? InvalidOperationException -> mal_raise_Insufficient_memory()
             let increased_bytes = value_array_increment * (new_capacity - capacity)
             if not (check_free_memory mm increased_bytes) then mal_raise_Insufficient_memory()
             let new_storage = Array.zeroCreate<value> new_capacity
-            if not (isNull storage) then Array.blit storage 0 new_storage 0 count
-            ary.storage <- new_storage
-            Interlocked.Add(&ary.memory_manager.counter, increased_bytes) |> ignore
-        ary.storage.[ary.count] <- item
-        ary.count <- ary.count + 1
-    | _ -> dontcare()
+            if not (isNull ary.Storage) then Array.blit ary.Storage 0 new_storage 0 ary.Count
+            ary.Storage <- new_storage
+            //Interlocked.Add(&ary.memory_manager.counter, increased_bytes) |> ignore
+        ary.Storage.[ary.Count] <- item
+        ary.Count <- ary.Count + 1
+    //| _ -> dontcare()
 
 let array_append (mm : memory_manager) (a : value) (b : value) =
-    match a, b with
-    | Varray { count = a_count; storage = a_storage }, Varray { count = b_count; storage = b_storage } ->
-        let c_count = a_count + b_count
-        let c = array_create mm c_count
-        match c with
-        | Varray ({ storage = c_storage } as c_ary) ->
-            if a_count <> 0 then Array.blit a_storage 0 c_storage 0 a_count
-            if b_count <> 0 then Array.blit b_storage 0 c_storage a_count b_count
-            c_ary.count <- c_count
-            c
-        | _ -> dontcare()
-    | _ -> dontcare()
+    let a = a :?> Array
+    let b = b :?> Array
+    let c_count = a.Count + b.Count
+    let c = array_create mm c_count :?> Array
+    Array.blit a.Storage 0 c.Storage 0 a.Count
+    Array.blit b.Storage 0 c.Storage a.Count b.Count
+    c.Count <- c_count
+    c :> value
+
+    //match a, b with
+    //| Varray { count = a_count; storage = a_storage }, Varray { count = b_count; storage = b_storage } ->
+    //    let c_count = a_count + b_count
+    //    let c = array_create mm c_count
+    //    match c with
+    //    | Varray ({ storage = c_storage } as c_ary) ->
+    //        if a_count <> 0 then Array.blit a_storage 0 c_storage 0 a_count
+    //        if b_count <> 0 then Array.blit b_storage 0 c_storage a_count b_count
+    //        c_ary.count <- c_count
+    //        c
+    //    | _ -> dontcare()
+    //| _ -> dontcare()
 
 let array_get (mm : memory_manager) (v : value) (i : int) =
-    match v with
-    | Varray ary ->
-        if 0 <= i && i < ary.count then
-            ary.storage.[i]
-        else raise (IndexOutOfRangeException())
-    | _ -> dontcare()
+    let ary = v :?> Array
+    if 0 <= i && i < ary.Count then
+        ary.Storage.[i]
+    else raise (IndexOutOfRangeException())
+    //match v with
+    //| Varray ary ->
+    //    if 0 <= i && i < ary.count then
+    //        ary.storage.[i]
+    //    else raise (IndexOutOfRangeException())
+    //| _ -> dontcare()
 
 let array_set (ary : value) i (x : value) =
-    match ary with
-    | Varray ary ->
-        if 0 <= i && i < ary.count then
-            ary.storage.[i] <- x
-        else raise (IndexOutOfRangeException())
-    | _ -> dontcare()
+    let ary = ary :?> Array
+    if 0 <= i && i < ary.Count then
+        ary.Storage.[i] <- x
+    else raise (IndexOutOfRangeException())
+    //match ary with
+    //| Varray ary ->
+    //    if 0 <= i && i < ary.count then
+    //        ary.storage.[i] <- x
+    //    else raise (IndexOutOfRangeException())
+    //| _ -> dontcare()
 
 let array_remove_at (mm : memory_manager) (v : value) i =
-    match v with
-    | Varray ary ->
-        if 0 <= i && i < ary.count then
-            for j = i + 1 to ary.count - 1 do
-                ary.storage.[j - 1] <- ary.storage.[j]
-            ary.storage.[ary.count - 1] <- Unchecked.defaultof<value>
-            ary.count <- ary.count - 1
-        else raise (IndexOutOfRangeException())
-    | _ -> dontcare()
+    let ary = v :?> Array
+    if 0 <= i && i < ary.Count then
+        for j = i + 1 to ary.Count - 1 do
+            ary.Storage.[j - 1] <- ary.Storage.[j]
+        ary.Storage.[ary.Count - 1] <- Unchecked.defaultof<value>
+        ary.Count <- ary.Count - 1
+    else raise (IndexOutOfRangeException())
+    //match v with
+    //| Varray ary ->
+    //    if 0 <= i && i < ary.count then
+    //        for j = i + 1 to ary.count - 1 do
+    //            ary.storage.[j - 1] <- ary.storage.[j]
+    //        ary.storage.[ary.count - 1] <- Unchecked.defaultof<value>
+    //        ary.count <- ary.count - 1
+    //    else raise (IndexOutOfRangeException())
+    //| _ -> dontcare()
 
 let array_clear (mm : memory_manager) (v : value) =
-    match v with
-    | Varray ary ->
-        for i = 0 to ary.count - 1 do
-            ary.storage.[i] <- Unchecked.defaultof<value>
-        ary.count <- 0
-    | _ -> dontcare()
+    let ary = v :?> Array
+    for i = 0 to ary.Count - 1 do
+        ary.Storage.[i] <- Unchecked.defaultof<value>
+    ary.Count <- 0
+    //match v with
+    //| Varray ary ->
+    //    for i = 0 to ary.count - 1 do
+    //        ary.storage.[i] <- Unchecked.defaultof<value>
+    //    ary.count <- 0
+    //| _ -> dontcare()
 
 let array_copy (mm : memory_manager) (orig : value) =
-    match orig with
-    | Varray { count = count; storage = storage } ->
-        let copy = array_create mm count
-        match copy with
-        | Varray ({ storage = copy_storage } as copy_ary) ->
-            if count <> 0 then Array.blit storage 0 copy_storage 0 count;
-            copy_ary.count <- count
-            copy
-        | _ -> dontcare()
-    | _ -> dontcare()
+    let orig = orig :?> Array
+    let copy = array_create mm orig.Count :?> Array
+    Array.blit orig.Storage 0 copy.Storage 0 orig.Count
+    copy.Count <- orig.Count
+    copy :> value
+
+    //match orig with
+    //| Varray { count = count; storage = storage } ->
+    //    let copy = array_create mm count
+    //    match copy with
+    //    | Varray ({ storage = copy_storage } as copy_ary) ->
+    //        if count <> 0 then Array.blit storage 0 copy_storage 0 count;
+    //        copy_ary.count <- count
+    //        copy
+    //    | _ -> dontcare()
+    //| _ -> dontcare()
 
 let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) (tyenv : tyenv) (touch : HashSet<value>) (ty : Type) (value : value) =
     if touch.Contains(value) then mal_failwith dummy_mm "cyclic value in interop"
@@ -369,15 +506,22 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<value> -> value -> obj>) 
             elif ty.IsArray then
                 let ty_elem = ty.GetElementType()
                 (fun (touch : HashSet<value>) (value : value) ->
-                    match value with
-                    | Varray malarray ->
-                        let array = System.Array.CreateInstance(ty_elem, malarray.count)
-                        touch.Add(value) |> ignore
-                        for i = 0 to malarray.count - 1 do
-                            array.SetValue(obj_of_value cache tyenv touch ty_elem malarray.storage.[i], i)
-                        touch.Remove(value) |> ignore
-                        array :> obj
-                    | _ -> dontcare())
+                    let ary = value :?> Array
+                    let array = System.Array.CreateInstance(ty_elem, ary.Count)
+                    touch.Add(value) |> ignore
+                    for i = 0 to ary.Count - 1 do
+                        array.SetValue(obj_of_value cache tyenv touch ty_elem ary.Storage.[i], i)
+                    touch.Remove(value) |> ignore
+                    array :> obj)
+                    //match value with
+                    //| Varray malarray ->
+                    //    let array = System.Array.CreateInstance(ty_elem, malarray.count)
+                    //    touch.Add(value) |> ignore
+                    //    for i = 0 to malarray.count - 1 do
+                    //        array.SetValue(obj_of_value cache tyenv touch ty_elem malarray.storage.[i], i)
+                    //    touch.Remove(value) |> ignore
+                    //    array :> obj
+                    //| _ -> dontcare())
             elif FSharpType.IsTuple ty then
                 let constr = FSharpValue.PreComputeTupleConstructor(ty)
                 let types = FSharpType.GetTupleElements(ty)
@@ -504,4 +648,5 @@ let wrap_fsharp_func (tyenv : tyenv) (obj_of_value_cache : Dictionary<Type, Hash
             try invokefast.Invoke(null, Array.append [| func; mm; |] arg_objs)
             with :? System.Reflection.TargetInvocationException as exn -> raise exn.InnerException
         value_of_obj value_of_obj_cache tyenv tyl.[tyl.Length - 1] mm result_obj
-    Vfunc (arity, func)
+    //Vfunc (arity, func)
+    Func(arity, func) :> value

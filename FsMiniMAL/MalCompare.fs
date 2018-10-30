@@ -37,13 +37,17 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
         stack.[stack_topidx] <- Unchecked.defaultof<Frame>
         stack_topidx <- stack_topidx - 1
 
-    let start a b =
-        match a, b with
-        | Vint (i0, _), Vint (i1, _)
-        | Vint (i0, _),  Vblock (i1, _, _)
-        | Vblock (i0, _, _), Vint (i1, _) ->
-            accu <- compare i0 i1
-        | Vfloat (x0, _), Vfloat (x1, _) ->
+    let start (v0 : value) (v1 : value) =
+        match v0.Kind, v1.Kind with
+        | ValueKind.VKint, ValueKind.VKint ->
+            accu <- compare (v0 :?> Int).Get (v1 :?> Int).Get
+        | ValueKind.VKint, ValueKind.VKblock ->
+            accu <- compare (v0 :?> Int).Get (v1 :?> Block).Tag
+        | ValueKind.VKblock, ValueKind.VKint ->
+            accu <- compare (v0 :?> Block).Tag (v1 :?> Int).Get
+        | ValueKind.VKfloat, ValueKind.VKfloat ->
+            let x0 = (v0 :?> Float).Get
+            let x1 = (v1 :?> Float).Get
             if mode = Compare then
                 accu <- x0.CompareTo(x1)
             else
@@ -51,24 +55,31 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
                     accu <- Nan
                 else
                     accu <- x0.CompareTo(x1)
-        | Vstring (s0, _), Vstring (s1, _) ->
+        | ValueKind.VKstring, ValueKind.VKstring ->
+            let s0 = (v0 :?> String).Get
+            let s1 = (v1 :?> String).Get
             accu <- Math.Sign(String.CompareOrdinal(s0, s1))
-        | Vblock (tag0, _, _), Vblock (tag1, _, _) ->
+        | ValueKind.VKblock, ValueKind.VKblock -> 
+            let tag0 = (v0 :?> Block).Tag
+            let tag1 = (v1 :?> Block).Tag
             let d = compare tag0 tag1
             if d <> 0 then
                 accu <- d
             else
-                stack_push { a = a; b = b; i = 0 }
-        | Varray ary0, Varray ary1 ->
-            let d = compare ary0.count ary1.count
-            if d <> 0 || ary0.count = 0  then
+                stack_push { a = v0; b = v1; i = 0 }
+        | ValueKind.VKarray, ValueKind.VKarray ->
+            let ary0 = v0 :?> Array
+            let ary1 = v1 :?> Array
+            let d = compare ary0.Count ary1.Count
+            if d <> 0 || ary0.Count = 0  then
                 accu <- d
             else
-                stack_push { a = a; b = b; i = 0 }
-        | (Vfunc _ | Vkfunc _ | Vclosure _ | Vpartial _ | Vcoroutine _), (Vfunc _ | Vkfunc _ | Vclosure _ | Vpartial _ | Vcoroutine _) ->
+                stack_push { a = v0; b = v1; i = 0 }
+        | (ValueKind.VKfunc|ValueKind.VKkfunc|ValueKind.VKpartial|ValueKind.VKclosure|ValueKind.VKcoroutine),
+          (ValueKind.VKfunc|ValueKind.VKkfunc|ValueKind.VKpartial|ValueKind.VKclosure|ValueKind.VKcoroutine) ->
             accu <- Uncomparable
             message <- "functional value"
-        | Vobj _, Vobj _ ->
+        | ValueKind.VKobj, ValueKind.VKobj ->
             accu <- Uncomparable
             message <- "Uncomparable object"
         | _ -> dontcare()
@@ -79,8 +90,10 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
         let tickCountAtStart = Environment.TickCount
         while (Environment.TickCount - tickCountAtStart < sliceTicks) && not (isFinished()) do
             let frame = stack.[stack_topidx]
-            match frame.a, frame.b with
-            | Vblock (_, fields0, _), Vblock (_, fields1, _) ->
+            match frame.a.Kind, frame.b.Kind with
+            | ValueKind.VKblock, ValueKind.VKblock ->
+                let fields0 = (frame.a :?> Block).Fields
+                let fields1 = (frame.b :?> Block).Fields
                 if frame.i < fields0.Length - 1 then
                     start fields0.[frame.i] fields1.[frame.i]
                     frame.i <- frame.i + 1
@@ -89,9 +102,11 @@ type MalCompare(mm : memory_manager, mode : Mode, argv : value array) =
                     // This is required to compare long list which has a length of more than maximum stack depth.
                     stack_discard_top()
                     start fields0.[frame.i] fields1.[frame.i]
-            | Varray ary0, Varray ary1 ->
-                if frame.i < ary0.count then
-                    start ary0.storage.[frame.i] ary1.storage.[frame.i]
+            | ValueKind.VKarray, ValueKind.VKarray ->
+                let ary0 = frame.a :?> Array
+                let ary1 = frame.b :?> Array
+                if frame.i < ary0.Count then
+                    start ary0.Storage.[frame.i] ary1.Storage.[frame.i]
                     frame.i <- frame.i + 1
                 else stack_discard_top()
             | _ -> dontcare()
@@ -133,28 +148,31 @@ let hash v =
 
     while queue.Count > 0 do
         let v = queue.Dequeue()
-        match v with
-        | Vint (i, _) -> combine i
-        | Vfloat (x, _) -> combine (x.GetHashCode())
-        | Vstring (s, _) -> combine (s.GetHashCode())
-        | Vblock (tag, fields, _) ->
-            combine tag
-            let n = min fields.Length limit
+        match v.Kind with
+        | ValueKind.VKint -> combine (Value.to_int v)
+        | ValueKind.VKfloat -> combine ((Value.to_float v).GetHashCode())
+        | ValueKind.VKstring -> combine ((Value.to_string v).GetHashCode())
+        | ValueKind.VKblock ->
+            let block = v :?> Block
+            combine block.Tag
+            let n = min block.Fields.Length limit
             for i = 0 to n - 1 do
-                queue.Enqueue(fields.[i])
+                queue.Enqueue(block.Fields.[i])
             limit <- limit - n
-        | Varray ary ->
-            combine ary.count
-            let n = min ary.count limit
+        | ValueKind.VKarray ->
+            let ary = v :?> Array
+            combine ary.Count
+            let n = min ary.Count limit
             for i = 0 to n - 1 do
-                queue.Enqueue(ary.storage.[i])
+                queue.Enqueue(ary.Storage.[i])
             limit <- limit - n
-        | Vfunc _
-        | Vkfunc _
-        | Vcoroutine _
-        | Vclosure _
-        | Vpartial _
-        | Vobj _ -> combine (LanguagePrimitives.PhysicalHash v)       
-        | Vvar _ -> dontcare()
+        | ValueKind.VKfunc
+        | ValueKind.VKkfunc
+        | ValueKind.VKpartial
+        | ValueKind.VKclosure
+        | ValueKind.VKcoroutine
+        | ValueKind.VKobj -> combine (LanguagePrimitives.PhysicalHash v)       
+        | ValueKind.VKvar -> dontcare()
+        | _ -> dontcare()
 
     accu

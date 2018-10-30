@@ -109,20 +109,24 @@ let parenthesize (node : Node) =
 let textInvalid = "<invalid>"
 
 let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level : int) (ty : type_expr) (value : value) : Node =
-    match repr ty, value with
+    match repr ty, value.Kind with
     | Tarrow _, _ -> textNode st "<fun>"
     | Ttuple [], _ -> textNode st "()"
-    | Tconstr(type_id.INT, []), Vint (i, _) ->
-        let s = i.ToString()
+    | Tconstr(type_id.INT, []), ValueKind.VKint ->
+        let s = (value :?> Value.Int).Get.ToString()
         let s =
             if 0 < level && s.[0] = '-' then
                 "(" + s + ")"
             else
                 s
         textNode st s
-    | Tconstr(type_id.CHAR, []), Vint(i, _) when int Char.MinValue <= i && i <= int Char.MaxValue ->
-        textNode st ("'" + escaped_char (char i) + "'")
-    | Tconstr(type_id.FLOAT, []), Vfloat (x, _) ->
+    | Tconstr(type_id.CHAR, []), ValueKind.VKint (* Vint(i, _) when int Char.MinValue <= i && i <= int Char.MaxValue *) ->
+        let i = (value :?> Int).Get
+        if int Char.MinValue <= i && i <= int Char.MaxValue then
+            textNode st ("'" + escaped_char (char i) + "'")
+        else raise InvalidValue
+    | Tconstr(type_id.FLOAT, []), ValueKind.VKfloat ->
+        let x = (value :?> Float).Get
         let s = string_of_float x
         let s =
             if 0 < level && s.[0] = '-' then
@@ -130,7 +134,8 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
             else
                 s
         textNode st s
-    | Tconstr (type_id.STRING, []), Vstring (s, _) ->
+    | Tconstr (type_id.STRING, []), ValueKind.VKstring ->
+        let s = (value :?> String).Get
         let limit = 1000
         if limit < s.Length then
             let sb = StringBuilder()
@@ -150,24 +155,34 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
             textNode st "..."
     | Ttuple l, _ ->
         list_loop st (path.Add(value)) "(" ")" (Seq.zip l (get_fields value))
-    | Tconstr(type_id.ARRAY, [a]), Varray ary ->
-        let items = seq { for i = 0 to ary.count - 1 do yield (a, ary.storage.[i]) }
+    | Tconstr(type_id.ARRAY, [a]), ValueKind.VKarray ->
+        let ary = value :?> Array
+        let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }
         list_loop st (path.Add(value)) "[|" "|]" items
     | Tconstr(type_id.LIST, [a]), _ ->
         let items = 
             seq {
                 let mutable x = value
                 let mutable path = path
-                while (match x with
-                        | Vblock (1, _, _) -> true
-                        | Vint (0, _) -> false
-                        | _ -> raise InvalidValue) do
-                    match x with
-                    | Vblock (1, [| hd; tl |], _) ->
-                        path <- path.Add(x)
-                        yield value_loop st path 0 a hd
-                        x <- tl
-                    | _ -> raise InvalidValue }
+                while (try Value.get_tag x = 1 with _ -> raise InvalidValue) do
+                    //match x.Kind with
+                    //    | ValueKind.VKblock (* Vblock (1, _, _) *) -> true
+                    //    | Vint (0, _) -> false
+                    //    | _ -> raise InvalidValue) do                    
+                    path <- path.Add(x)
+                    let hd, tl =
+                        try
+                            let fields = Value.get_fields x
+                            fields.[0], fields.[1]
+                        with _ -> raise InvalidValue
+                    yield value_loop st path 0 a hd
+                    x <- tl }
+                    //match x with
+                    //| Vblock (1, [| hd; tl |], _) ->
+                    //    path <- path.Add(x)
+                    //    yield value_loop st path 0 a hd
+                    //    x <- tl
+                    //| _ -> raise InvalidValue }
         seq_loop st "[" "]" items
     | Tconstr(type_id.EXN, _), _ ->
         let tag = get_tag value
@@ -196,10 +211,11 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
             match info.ti_kind with
             | Kbasic ->
                 let abstr() = textNode st "<abstr>"
-                match value with
-                | Vobj o ->
-                    if o.GetType() = typeof<System.Text.RegularExpressions.Match> then
-                        let m = o :?> System.Text.RegularExpressions.Match
+                if value.Kind = ValueKind.VKobj then
+                //match value with
+                //| Vobj o ->
+                    if (value :?> Obj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
+                        let m = (value :?> Obj).Obj :?> System.Text.RegularExpressions.Match
                         let maxPreviewLength = 10
                         if m.Success then
                             if m.Length < maxPreviewLength then
@@ -208,28 +224,53 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
                                 textNode st (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\"...>" m.Success m.Index m.Length (m.Value.Substring(0, maxPreviewLength)))
                         else textNode st "<match Success=false>"
                     else abstr()
-                | _ -> abstr()
+                //| _ -> abstr()
+                else abstr()
             | Kabbrev ty -> value_loop st path level (subst sl ty) value
             | Kvariant casel ->
-                match value with
-                | Vint (tag, _) ->
-                    let name, _, _ = List.find (fun (_, tag', _) -> tag = tag') casel
-                    textNode st name
-                | Vblock (tag, fields, _) ->
-                    let name, _, tyl' = List.find (fun (_, tag', _) -> tag = tag') casel
+                let name, _, fieldTypes =
+                    try
+                        let tag = Value.get_tag value
+                        List.find (fun (_, tag', _) -> tag = tag') casel
+                    with _ -> raise InvalidValue
+                let fields =
+                    try Value.get_fields value
+                    with _ -> raise InvalidValue
+
+                if fieldTypes.Length = 0 then
+                    if fields.Length = 0 then
+                        textNode st name
+                    else raise InvalidValue
+                else
                     let section = Section.Create(Flow, 0)
                     section.Add(textNode st name)
                     let fields =
-                        (match tyl' with
+                        (match fieldTypes with
                         | [ ty' ] -> value_loop st (path.Add(value)) 1 (subst sl ty') fields.[0]
-                        | _ -> list_loop st (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) tyl') fields))
+                        | _ -> list_loop st (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) fieldTypes) fields))
                     section.Add(fields)
                     let node = Section section
                     if level > 0 then parenthesize node else node
-                | _ -> textNode st textInvalid
+
+                //match value with
+                //| Vint (tag, _) ->
+                //    let name, _, _ = List.find (fun (_, tag', _) -> tag = tag') casel
+                //    textNode st name
+                //| Vblock (tag, fields, _) ->
+                //    let name, _, tyl' = List.find (fun (_, tag', _) -> tag = tag') casel
+                //    let section = Section.Create(Flow, 0)
+                //    section.Add(textNode st name)
+                //    let fields =
+                //        (match tyl' with
+                //        | [ ty' ] -> value_loop st (path.Add(value)) 1 (subst sl ty') fields.[0]
+                //        | _ -> list_loop st (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) tyl') fields))
+                //    section.Add(fields)
+                //    let node = Section section
+                //    if level > 0 then parenthesize node else node
+                //| _ -> textNode st textInvalid
             | Krecord l ->
-                match value with
-                | Vblock (_, fields, _) ->
+                try
+                    let fields = Value.get_fields value
                     let path = path.Add(value)
                     let items =
                         Seq.zip l fields
@@ -239,7 +280,19 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<value>) (level 
                             section.Add(value_loop st path 0 (subst sl ty_gen) value)
                             Section section)
                     seq_loop st "{" "}" items
-                | _ -> textNode st textInvalid
+                with _ -> textNode st textInvalid 
+                //match value with
+                //| Vblock (_, fields, _) ->
+                //    let path = path.Add(value)
+                //    let items =
+                //        Seq.zip l fields
+                //        |> Seq.map (fun ((name : string, ty_gen, _ : access), value) ->
+                //            let section = Section.Create(Flow, 0)
+                //            section.Add(textNode st (name + " ="))
+                //            section.Add(value_loop st path 0 (subst sl ty_gen) value)
+                //            Section section)
+                //    seq_loop st "{" "}" items
+                //| _ -> textNode st textInvalid
     | _ -> raise InvalidValue
 
 and seq_loop (st : printer_state) (lp : string) (rp : string) (items : Node seq) : Node =
@@ -410,7 +463,7 @@ let string_of_node cols node =
     loop 0s 0 false node
 
     let buf = buf.ToArray()
-    let s = String(Array.map (fun struct (c, _) -> c) buf)
+    let s = System.String(Array.map (fun struct (c, _) -> c) buf)
     let colors = Array.map (fun struct (_, color) -> color) buf
     (s, colors)
 
@@ -440,7 +493,7 @@ let print_type tyenv cols ty =
     update_sizes node
     string_of_node cols node
 
-let print_definition (define : tyenv) cols name (info : value_info) value =
+let print_definition (define : tyenv) cols name (info : value_info) (value : value) =
     let sxn1 = Section.Create(Flow, 0)
     let valvar = match info.vi_access with Immutable -> "val" | Mutable -> "var"
     sxn1.Add(sprintf "%s %s :" valvar name)
@@ -449,10 +502,9 @@ let print_definition (define : tyenv) cols name (info : value_info) value =
     let sxn2 = Section.Create(Flow, 1)
     sxn2.Add(Section sxn1)
     let value =
-        match info.vi_access, value with
-        | Immutable, _ -> value
-        | Mutable, Vvar r -> !r
-        | _ -> dontcare()
+        match info.vi_access with
+        | Immutable -> value
+        | Mutable -> (value :?> Value.Var).Content
     sxn2.Add(node_of_value define info.vi_type value)
     let node = Section sxn2
     update_sizes node

@@ -20,7 +20,7 @@ let tyenv_std, alloc_std, genv_std =
         genv <- array_ensure_capacity_exn Int32.MaxValue (ofs + 1) genv
         genv.[ofs] <- value
 
-    let add_func name ty arity func = add name ty (Vfunc (arity, func))
+    let add_func name ty arity func = add name ty (Func(arity, func) :> value)
     let add_i name i = add name ty_int (of_int dummy_mm i)    
     let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> of_int mm (f (to_int argv.[0])))
     let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> of_int mm (f (to_int argv.[0]) (to_int argv.[1])))
@@ -33,24 +33,24 @@ let tyenv_std, alloc_std, genv_std =
     let add_uu name (f : memory_manager -> unit) = add_func name ty_uu 1 (fun mm argv -> f mm; unit)
     
     add "kprintf" (arrow2 (arrow ty_string ty_b) (Tconstr (type_id.FORMAT, [ty_a; ty_b])) ty_a)
-        (Vkfunc (2, (fun mm frame ->
+        (KFunc (2, (fun mm frame ->
             let k = frame.[1]
-            let cmds = match frame.[2] with | Vobj o -> o :?> PrintfFormat.PrintfCommand list | _ -> dontcare()
+            let cmds = (frame.[2] :?> Obj).Obj :?> PrintfFormat.PrintfCommand list
             let cmds_arity = MalPrintf.arity_of_cmds cmds
             let arity_remain = cmds_arity - (frame.Length - 3)
             if arity_remain > 0 then
-                [| Vpartial (arity_remain, frame) |]
+                [| Partial (arity_remain, frame) |]
             else
                 let s = MalPrintf.exec_cmds cmds (Array.sub frame 3 cmds_arity)
                 let j = 3 + cmds_arity
                 Array.append [| k; of_string mm s |] (Array.sub frame j (frame.Length - j)))))
-    add "compare" ty_vvi (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Compare, argv) :> IMalCoroutine))
-    add "=" ty_vvb (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Equal, argv) :> IMalCoroutine))
-    add "<>" ty_vvb (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Not_equal, argv) :> IMalCoroutine))
-    add "<" ty_vvb (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_than, argv) :> IMalCoroutine))
-    add ">" ty_vvb (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_than, argv) :> IMalCoroutine))
-    add "<=" ty_vvb (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_equal, argv) :> IMalCoroutine))
-    add ">=" ty_vvb (Vcoroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_equal, argv) :> IMalCoroutine))
+    add "compare" ty_vvi (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Compare, argv) :> IMalCoroutine))
+    add "=" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Equal, argv) :> IMalCoroutine))
+    add "<>" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Not_equal, argv) :> IMalCoroutine))
+    add "<" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_than, argv) :> IMalCoroutine))
+    add ">" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_than, argv) :> IMalCoroutine))
+    add "<=" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Less_equal, argv) :> IMalCoroutine))
+    add ">=" ty_vvb (Coroutine (2, fun mm argv -> new MalCompare.MalCompare(mm, MalCompare.Mode.Greater_equal, argv) :> IMalCoroutine))
     add_func "not" ty_bb 1 (fun mm argv -> of_bool (not (to_bool argv.[0])))    
     add_func "&&" ty_bbb 2 (fun mm argv -> of_bool (to_bool argv.[0] && to_bool argv.[1]))
     add_func "||" ty_bbb 2 (fun mm argv -> of_bool (to_bool argv.[0] || to_bool argv.[1]))
@@ -99,10 +99,10 @@ let tyenv_std, alloc_std, genv_std =
             if n < 0 then mal_failwith mm "array_create: negative length"
             let x = argv.[1]
             let v = array_create mm n
-            let ary = to_malarray v
+            let ary = v :?> Array
             for i = 0 to n - 1 do
-                ary.storage.[i] <- x
-            ary.count <- n
+                ary.Storage.[i] <- x
+            ary.Count <- n
             v)
 
     add_func "^" (arrow2 (ty_array ty_a) (ty_array ty_a) (ty_array ty_a)) 2 (fun mm argv -> array_append mm argv.[0] argv.[1])
@@ -113,13 +113,14 @@ let tyenv_std, alloc_std, genv_std =
     add_func "^^" ty_sss 2 string_append_func
 
     let array_get_func (mm : memory_manager) (argv : value array) =
-        match argv.[0] with
-        | Vstring (s, _) ->
+        match argv.[0].Kind with
+        | ValueKind.VKstring ->
+            let s = (argv.[0] :?> String).Get
             let i = to_int argv.[1]
             if 0 <= i && i < s.Length then
                 of_char mm s.[i]
             else mal_raise_Index_out_of_range()
-        | Varray _ ->
+        | ValueKind.VKarray ->
             try array_get mm (argv.[0]) (to_int argv.[1])
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()
         | _ -> dontcare()
@@ -136,7 +137,7 @@ let tyenv_std, alloc_std, genv_std =
     add_func ".[]<-" ty_array_set 3 array_set_func
     add_func "arraySet" ty_array_set 3 array_set_func
 
-    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> of_int mm (to_malarray argv.[0]).count)
+    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> of_int mm (argv.[0] :?> Array).Count)
     add_func "arrayCopy" (arrow (ty_array ty_a) (ty_array ty_a)) 1 (fun mm argv -> array_copy mm argv.[0])
 
     add_func "arraySub" (arrow3 (ty_array ty_a) ty_int ty_int (ty_array ty_a)) 3
@@ -144,11 +145,11 @@ let tyenv_std, alloc_std, genv_std =
             let ary = to_malarray argv.[0]
             let start = to_int argv.[1]
             let count = to_int argv.[2]
-            if not (0 <= count && 0 <= start && start + count <= ary.count) then mal_raise_Index_out_of_range()
+            if not (0 <= count && 0 <= start && start + count <= ary.Count) then mal_raise_Index_out_of_range()
             let sub = array_create mm count
             let subary = to_malarray sub
-            Array.blit ary.storage start subary.storage 0 count
-            subary.count <- count
+            Array.blit ary.Storage start subary.Storage 0 count
+            subary.Count <- count
             sub)
 
     add_func "arrayFill" (arrow4 (ty_array ty_a) ty_int ty_int ty_a ty_unit) 4
@@ -157,8 +158,8 @@ let tyenv_std, alloc_std, genv_std =
             let start = to_int argv.[1]
             let count = to_int argv.[2]
             let item = argv.[3]
-            if not (0 <= count && 0 <= start && start + count <= ary.count) then mal_raise_Index_out_of_range()
-            Array.fill ary.storage start count item
+            if not (0 <= count && 0 <= start && start + count <= ary.Count) then mal_raise_Index_out_of_range()
+            Array.fill ary.Storage start count item
             unit)
         
     add_func "arrayBlit" (arrow5 (ty_array ty_a) ty_int (ty_array ty_a) ty_int ty_int ty_unit) 5
@@ -168,21 +169,21 @@ let tyenv_std, alloc_std, genv_std =
             let dst = to_malarray argv.[2]
             let j = to_int argv.[3]
             let count = to_int argv.[4]
-            if not (0 <= i && i + count <= src.count && 0 <= j && j + count <= dst.count) then mal_raise_Index_out_of_range()
+            if not (0 <= i && i + count <= src.Count && 0 <= j && j + count <= dst.Count) then mal_raise_Index_out_of_range()
             for k = 0 to count - 1 do
-                dst.storage.[j+k] <- src.storage.[i+k]
+                dst.Storage.[j+k] <- src.Storage.[i+k]
             unit)
 
     add_func "stringLength" (arrow ty_string ty_int) 1 (fun mm argv -> of_int mm (to_string argv.[0]).Length)
-    add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (String(char (to_int argv.[0]), 1)))
+    add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (System.String(char (to_int argv.[0]), 1)))
 
     add_func "stringOfCharArray" (arrow (ty_array ty_char) ty_string) 1
         (fun mm argv ->
             let ary = to_malarray argv.[0]
-            let buf = Array.zeroCreate<char> ary.count
-            for i = 0 to ary.count - 1 do
-                buf.[i] <- char (to_int ary.storage.[i])
-            of_string mm (String(buf)))
+            let buf = Array.zeroCreate<char> ary.Count
+            for i = 0 to ary.Count - 1 do
+                buf.[i] <- char (to_int ary.Storage.[i])
+            of_string mm (System.String(buf)))
 
     add_func "charArrayOfString" (arrow ty_string (ty_array ty_char)) 1
         (fun mm argv ->
@@ -190,16 +191,16 @@ let tyenv_std, alloc_std, genv_std =
             let v = array_create mm s.Length
             let ary = to_malarray v
             for i = 0 to s.Length - 1 do
-                ary.storage.[i] <- of_int mm (int s.[i])
-            ary.count <- s.Length
+                ary.Storage.[i] <- of_int mm (int s.[i])
+            ary.Count <- s.Length
             v)
 
     add_func "stringConcat" (arrow (ty_array ty_string) ty_string) 1
         (fun mm argv ->
             let ary = to_malarray argv.[0]
             let sb = StringBuilder()
-            for i = 0 to ary.count - 1 do
-                sb.Append(to_string ary.storage.[i]) |> ignore
+            for i = 0 to ary.Count - 1 do
+                sb.Append(to_string ary.Storage.[i]) |> ignore
             of_string mm (sb.ToString()))
 
     add_func "stringSub" (arrow3 ty_string ty_int ty_int ty_string) 3
