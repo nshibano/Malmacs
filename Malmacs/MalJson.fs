@@ -224,23 +224,21 @@ exception InvalidNumberLiteral of string
 type private Printer(singleLine : bool) =
 
     let sb = StringBuilder()
-    let mutable indentation = 0
-    let indentationIncrease = 2
+    let mutable indent = 0
+    let indentIncr = 2
 
     let write (s : string) =
         sb.Append(s) |> ignore
 
-    let newLine =
+    let writeNewLine() =
         if not singleLine then
-            fun () ->
-                sb.Append("\r\n") |> ignore
-                sb.Append(' ', indentation) |> ignore
-        else fun () -> ()
+            sb.Append("\r\n") |> ignore
+            sb.Append(' ', indent) |> ignore
 
-    let propSep =
+    let writePropSep() =
         if not singleLine
-        then "\": "
-        else "\":"
+        then write "\": "
+        else write "\":"
     
     // Encode characters that are not valid in JS string. The implementation is based
     // on https://github.com/mono/mono/blob/master/mcs/class/System.Web/System.Web/HttpUtility.cs
@@ -275,28 +273,28 @@ type private Printer(singleLine : bool) =
             write "\""
         | Jobject properties ->
             write "{"
-            indentation <- indentation +  indentationIncrease
+            indent <- indent +  indentIncr
             for i = 0 to properties.Length - 1 do
                 let k, v = properties.[i]
                 if i > 0 then write ","
-                newLine()
+                writeNewLine()
                 write "\""
                 writeChars k
-                write propSep
+                writePropSep()
                 loop v
-            indentation <- indentation - indentationIncrease
-            newLine()
+            indent <- indent - indentIncr
+            writeNewLine()
             write "}"
         | Jarray elements ->
             write "["
-            indentation <- indentation + indentationIncrease
+            indent <- indent + indentIncr
             for i = 0 to elements.Length - 1 do
                 if i > 0 then write ","
-                newLine()
+                writeNewLine()
                 loop elements.[i]
-            indentation <- indentation - indentationIncrease
+            indent <- indent - indentIncr
             if elements.Length > 0 then
-                newLine()
+                writeNewLine()
             write "]"
 
     member this.Print(json : json) =
