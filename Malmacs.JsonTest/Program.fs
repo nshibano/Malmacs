@@ -458,6 +458,9 @@
 ]"""
 
 let sample2 = """[
+  null,
+  true,
+  false,
   "\u0000\u0001\b\f\n\t\r\\\"",
   "𠮷野家",
   0,
@@ -478,6 +481,9 @@ let main argv =
     ensure (MalJson.parse (MalJson.print true json1) = json1)
     ensure (MalJson.print false (MalJson.parse sample2) = sample2)
     
+    let json2 = MalJson.Jarray [| MalJson.Jstring (String(Array.init 0x100 (fun i -> char i))) |]
+    ensure (json2 = MalJson.parse (MalJson.print false json2))
+
     let error input pos =
         let errorPos =
             try
