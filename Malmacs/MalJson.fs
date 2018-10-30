@@ -12,9 +12,7 @@
 module Malmacs.MalJson
 
 open System
-open System.Globalization
 open System.Text
-open System.Text.RegularExpressions
 
 type json =
     | Jstring of string
@@ -100,7 +98,7 @@ type private Parser(s : string) =
                         'a' <= c && c <= 'f' ||
                         'A' <= c && c <= 'F') then invalidChar()
                 pos <- pos + 1
-            char (Int32.Parse(s.Substring(start, 4), NumberStyles.HexNumber))
+            char (Int32.Parse(s.Substring(start, 4), System.Globalization.NumberStyles.HexNumber))
         else
             let c =
                 match c with
@@ -212,12 +210,16 @@ type private Parser(s : string) =
             if pos < s.Length then invalidChar()
             value
         with :? IndexOutOfRangeException -> raise UnexpectedEof
+    
+    member x.ValidateNumberLiteral() =
+        try
+            parseNumber() |> ignore
+            pos = s.Length
+        with _ -> false
 
 let parse (s : string) = Parser(s).Parse()
 
 exception InvalidNumberLiteral of string
-
-let reNumberLiteral = Regex(@"\A-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?\z", RegexOptions.ExplicitCapture)
 
 type private Printer(singleLine : bool) =
 
@@ -264,7 +266,7 @@ type private Printer(singleLine : bool) =
         | Jtrue -> write "true"
         | Jfalse -> write "false"
         | Jnumber number ->
-            if not (reNumberLiteral.IsMatch(number)) then
+            if not (Parser(number).ValidateNumberLiteral()) then
                 raise (InvalidNumberLiteral number)
             write number
         | Jstring s ->
