@@ -90,13 +90,13 @@ and expression (alloc : alloc) (tailcall_info : (string * int) option) (se : Syn
             | true, Mutable -> UEgetcapvar info.ofs
         | SEconstr (tag, l) ->
             if l.Length = 0 then
-                UEconst(of_int dummy_mm tag)
+                UEconst(ofInt dummy_mm tag)
             else
                 let uel = List.map (expression alloc None) l
                 UEblock(tag, Array.ofSeq uel)
-        | SEint s -> UEconst(Value.of_int dummy_mm (int s))
-        | SEchar c -> UEconst(Value.of_char dummy_mm c)
-        | SEfloat x -> UEconst (Value.of_float dummy_mm x)
+        | SEint s -> UEconst(Value.ofInt dummy_mm (int s))
+        | SEchar c -> UEconst(Value.ofChar dummy_mm c)
+        | SEfloat x -> UEconst (Value.ofFloat dummy_mm x)
         | SEtuple [] -> UEconst(Value.unit)
         | SEtuple l -> UEblock(0, Array.ofSeq (Seq.map (expression alloc None) l))
         | SElist (LKarray, l) -> UEarray(Array.ofSeq(Seq.map (expression alloc None) l))

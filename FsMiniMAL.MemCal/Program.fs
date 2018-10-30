@@ -24,10 +24,10 @@ let main argv =
         ary.[0] |> ignore // To keep ary in scope. In release build this changes result.
         float (x1 - x0) / float many
         
-    let sizeof_int = test (fun mm i -> of_int mm i)
+    let sizeof_int = test (fun mm i -> ofInt mm i)
     printfn "sizeof int: %.1f" sizeof_int
 
-    let sizeof_float = test (fun mm i -> of_float mm (float i))    
+    let sizeof_float = test (fun mm i -> ofFloat mm (float i))    
     printfn "sizeof float: %.1f" sizeof_float
 
     let sizeof_block_len0 = test (fun mm i -> block_create mm 0 (Array.create 0 unit))

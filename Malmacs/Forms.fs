@@ -308,7 +308,7 @@ and Repl() as this =
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
         | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.En cols msg)
     
-    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : MalValue array) =
+    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : MemoryManager) (argv : MalValue array) =
         let e = to_obj argv.[0] :?> Editor
         let range = interp.ObjOfValue<Range> argv.[1]
         let doc = e.Doc
@@ -350,7 +350,7 @@ and Repl() as this =
                 | _ -> dontcare()
             member x.Dispose() = () }
 
-    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : memory_manager) (argv : MalValue array) =
+    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : MemoryManager) (argv : MalValue array) =
         let e = to_obj argv.[0] :?> Editor
         let ary = to_malarray argv.[1]
         let mutable state = 0

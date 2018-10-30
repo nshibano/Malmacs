@@ -17,7 +17,7 @@ open FsMiniMAL.Syntax
 open FsMiniMAL.Typechk
 
 
-let taskCoroutineStarter name (f : memory_manager -> MalValue array -> MalValue) (mm : memory_manager) (argv : MalValue array) =
+let taskCoroutineStarter name (f : MemoryManager -> MalValue array -> MalValue) (mm : MemoryManager) (argv : MalValue array) =
     let task = Task.Run(fun () -> f mm argv)
 
     { new IMalCoroutine with
@@ -28,10 +28,10 @@ let taskCoroutineStarter name (f : memory_manager -> MalValue array -> MalValue)
             with exn -> mal_failwith mm (name + ": " + exn.InnerException.Message)
         member x.Dispose() = () }
 
-let regexMatchCoroutineStarter (mm : memory_manager) (argv : MalValue array) =
+let regexMatchCoroutineStarter (mm : MemoryManager) (argv : MalValue array) =
     let input = to_string argv.[0]
     let pattern = to_string argv.[1]
-    let options = enum<RegexOptions>(to_int argv.[2])
+    let options = enum<RegexOptions>(toInt argv.[2])
     let f() = Regex.Match(input, pattern, options, TimeSpan(0, 0, 10))
     let task = Task.Run(f)
 

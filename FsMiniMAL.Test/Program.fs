@@ -84,7 +84,7 @@ let main argv =
         mal.Do("n")
 
         let tyenv, value, ty = mal.Result
-        if to_int value = 100 then
+        if toInt value = 100 then
             ()
         else
             printfn "Test keep_shadowed_globals_after_failure failed."
@@ -96,7 +96,7 @@ let main argv =
         mal.Do("a.[0]")
 
         let tyenv, value, ty = mal.Result
-        if Unify.same_type tyenv ty Types.ty_int && to_int value = 100 then
+        if Unify.same_type tyenv ty Types.ty_int && toInt value = 100 then
             ()
         else
             printfn "Test apply_side_effects_on_tyenv_even_if_execution_failed failed."
@@ -404,7 +404,7 @@ accu"
         let interp = Top.createInterpreterExt({ memory_manager_create_default() with maximum_stack_depth = 100 })
         interp.Do("fun loop accu n m = if n <= m then loop (accu + n) (n + 1) m else accu")
         interp.Do("loop 0 1 1000")
-        if not (interp.State = State.Success && to_int interp.Accu = 500500) then
+        if not (interp.State = State.Success && toInt interp.Accu = 500500) then
             printfn "Tailcall test failed."
     tailcall_test()
 

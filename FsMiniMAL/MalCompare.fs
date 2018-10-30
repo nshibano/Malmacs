@@ -22,7 +22,7 @@ let [<Literal>] Nan          = 0x80000001
 
 let initial : Frame array = [||]
 
-type MalCompare(mm : memory_manager, mode : Mode, argv : MalValue array) =
+type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
     let mutable accu = 0
     let mutable stack_topidx = -1
     let mutable stack = initial
@@ -149,8 +149,8 @@ let hash v =
     while queue.Count > 0 do
         let v = queue.Dequeue()
         match v.Kind with
-        | MalValueKind.INT -> combine (Value.to_int v)
-        | MalValueKind.FLOAT -> combine ((Value.to_float v).GetHashCode())
+        | MalValueKind.INT -> combine (Value.toInt v)
+        | MalValueKind.FLOAT -> combine ((Value.toFloat v).GetHashCode())
         | MalValueKind.STRING -> combine ((Value.to_string v).GetHashCode())
         | MalValueKind.BLOCK ->
             let block = v :?> MalBlock

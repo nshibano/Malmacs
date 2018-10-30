@@ -21,16 +21,16 @@ let tyenv_std, alloc_std, genv_std =
         genv.[ofs] <- value
 
     let add_func name ty arity func = add name ty (MalFunc(arity, func) :> MalValue)
-    let add_i name i = add name ty_int (of_int dummy_mm i)    
-    let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> of_int mm (f (to_int argv.[0])))
-    let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> of_int mm (f (to_int argv.[0]) (to_int argv.[1])))
-    let add_f name x = add name ty_float (of_float dummy_mm x)
-    let add_ff name (f : float -> float) = add_func name ty_ff 1 (fun mm argv -> of_float mm (f (to_float argv.[0])))
-    let add_fff name (f : float -> float -> float) = add_func name ty_fff 2 (fun mm argv -> of_float mm (f (to_float argv.[0]) (to_float argv.[1])))
-    let add_if name (f : int -> float) = add_func name ty_if 1 (fun mm argv -> of_float mm (f (to_int argv.[0])))
-    let add_fi name (f : float -> int) = add_func name ty_fi 1 (fun mm argv -> of_int mm (f (to_float argv.[0])))
+    let add_i name i = add name ty_int (ofInt dummy_mm i)    
+    let add_ii name (f : int -> int) = add_func name ty_ii 1 (fun mm argv -> ofInt mm (f (toInt argv.[0])))
+    let add_iii name (f : int -> int -> int) = add_func name ty_iii 2 (fun mm argv -> ofInt mm (f (toInt argv.[0]) (toInt argv.[1])))
+    let add_f name x = add name ty_float (ofFloat dummy_mm x)
+    let add_ff name (f : float -> float) = add_func name ty_ff 1 (fun mm argv -> ofFloat mm (f (toFloat argv.[0])))
+    let add_fff name (f : float -> float -> float) = add_func name ty_fff 2 (fun mm argv -> ofFloat mm (f (toFloat argv.[0]) (toFloat argv.[1])))
+    let add_if name (f : int -> float) = add_func name ty_if 1 (fun mm argv -> ofFloat mm (f (toInt argv.[0])))
+    let add_fi name (f : float -> int) = add_func name ty_fi 1 (fun mm argv -> ofInt mm (f (toFloat argv.[0])))
     let add_vvb name (f : MalValue -> MalValue -> bool) = add_func name ty_vvb 2 (fun mm argv -> of_bool (f argv.[0] argv.[1]))
-    let add_uu name (f : memory_manager -> unit) = add_func name ty_uu 1 (fun mm argv -> f mm; unit)
+    let add_uu name (f : MemoryManager -> unit) = add_func name ty_uu 1 (fun mm argv -> f mm; unit)
     
     add "kprintf" (arrow2 (arrow ty_string ty_b) (Tconstr (type_id.FORMAT, [ty_a; ty_b])) ty_a)
         (MalKFunc (2, (fun mm frame ->
@@ -54,8 +54,8 @@ let tyenv_std, alloc_std, genv_std =
     add_func "not" ty_bb 1 (fun mm argv -> of_bool (not (to_bool argv.[0])))    
     add_func "&&" ty_bbb 2 (fun mm argv -> of_bool (to_bool argv.[0] && to_bool argv.[1]))
     add_func "||" ty_bbb 2 (fun mm argv -> of_bool (to_bool argv.[0] || to_bool argv.[1]))
-    add_func "." ty_unit 2 (fun mm argv -> (get_fields argv.[0]).[to_int argv.[1]])
-    add_func ".<-" ty_unit 3 (fun mm argv -> (get_fields argv.[0]).[to_int argv.[1]] <- argv.[2]; Value.unit)
+    add_func "." ty_unit 2 (fun mm argv -> (get_fields argv.[0]).[toInt argv.[1]])
+    add_func ".<-" ty_unit 3 (fun mm argv -> (get_fields argv.[0]).[toInt argv.[1]] <- argv.[2]; Value.unit)
     add_i "intMin" System.Int32.MinValue
     add_i "intMax" System.Int32.MaxValue
     add_ii "~-" ( ~- )
@@ -95,7 +95,7 @@ let tyenv_std, alloc_std, genv_std =
 
     add_func "arrayCreate" (arrow2 ty_int ty_a (ty_array ty_a)) 2
         (fun mm argv ->
-            let n = to_int argv.[0]
+            let n = toInt argv.[0]
             if n < 0 then mal_failwith mm "array_create: negative length"
             let x = argv.[1]
             let v = array_create mm n
@@ -107,44 +107,44 @@ let tyenv_std, alloc_std, genv_std =
 
     add_func "^" (arrow2 (ty_array ty_a) (ty_array ty_a) (ty_array ty_a)) 2 (fun mm argv -> array_append mm argv.[0] argv.[1])
 
-    let string_append_func (mm : memory_manager) (argv : MalValue array) =
+    let string_append_func (mm : MemoryManager) (argv : MalValue array) =
         of_string mm (to_string argv.[0] + to_string argv.[1])
     add_func "stringAppend" ty_sss 2 string_append_func
     add_func "^^" ty_sss 2 string_append_func
 
-    let array_get_func (mm : memory_manager) (argv : MalValue array) =
+    let array_get_func (mm : MemoryManager) (argv : MalValue array) =
         match argv.[0].Kind with
         | MalValueKind.STRING ->
             let s = (argv.[0] :?> MalString).Get
-            let i = to_int argv.[1]
+            let i = toInt argv.[1]
             if 0 <= i && i < s.Length then
-                of_char mm s.[i]
+                ofChar mm s.[i]
             else mal_raise_Index_out_of_range()
         | MalValueKind.ARRAY ->
-            try array_get mm (argv.[0]) (to_int argv.[1])
+            try array_get mm (argv.[0]) (toInt argv.[1])
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()
         | _ -> dontcare()
     let ty_array_get = arrow2 (ty_array ty_a) ty_int ty_a
     add_func ".[]" ty_array_get 2 array_get_func
     add_func "arrayGet" ty_array_get 2 array_get_func
 
-    let array_set_func (g : memory_manager) (argv : MalValue array) =
+    let array_set_func (g : MemoryManager) (argv : MalValue array) =
         try
-            array_set argv.[0] (to_int argv.[1]) argv.[2]
+            array_set argv.[0] (toInt argv.[1]) argv.[2]
             Value.unit
         with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()
     let ty_array_set = arrow3 (ty_array ty_a) ty_int ty_a ty_unit
     add_func ".[]<-" ty_array_set 3 array_set_func
     add_func "arraySet" ty_array_set 3 array_set_func
 
-    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> of_int mm (argv.[0] :?> MalArray).Count)
+    add_func "arrayLength" (arrow (ty_array ty_a) ty_int) 1 (fun mm argv -> ofInt mm (argv.[0] :?> MalArray).Count)
     add_func "arrayCopy" (arrow (ty_array ty_a) (ty_array ty_a)) 1 (fun mm argv -> array_copy mm argv.[0])
 
     add_func "arraySub" (arrow3 (ty_array ty_a) ty_int ty_int (ty_array ty_a)) 3
         (fun mm argv ->
             let ary = to_malarray argv.[0]
-            let start = to_int argv.[1]
-            let count = to_int argv.[2]
+            let start = toInt argv.[1]
+            let count = toInt argv.[2]
             if not (0 <= count && 0 <= start && start + count <= ary.Count) then mal_raise_Index_out_of_range()
             let sub = array_create mm count
             let subary = to_malarray sub
@@ -155,8 +155,8 @@ let tyenv_std, alloc_std, genv_std =
     add_func "arrayFill" (arrow4 (ty_array ty_a) ty_int ty_int ty_a ty_unit) 4
         (fun mm argv ->
             let ary = to_malarray argv.[0]
-            let start = to_int argv.[1]
-            let count = to_int argv.[2]
+            let start = toInt argv.[1]
+            let count = toInt argv.[2]
             let item = argv.[3]
             if not (0 <= count && 0 <= start && start + count <= ary.Count) then mal_raise_Index_out_of_range()
             Array.fill ary.Storage start count item
@@ -165,24 +165,24 @@ let tyenv_std, alloc_std, genv_std =
     add_func "arrayBlit" (arrow5 (ty_array ty_a) ty_int (ty_array ty_a) ty_int ty_int ty_unit) 5
         (fun mm argv ->
             let src = to_malarray argv.[0]
-            let i = to_int argv.[1]
+            let i = toInt argv.[1]
             let dst = to_malarray argv.[2]
-            let j = to_int argv.[3]
-            let count = to_int argv.[4]
+            let j = toInt argv.[3]
+            let count = toInt argv.[4]
             if not (0 <= i && i + count <= src.Count && 0 <= j && j + count <= dst.Count) then mal_raise_Index_out_of_range()
             for k = 0 to count - 1 do
                 dst.Storage.[j+k] <- src.Storage.[i+k]
             unit)
 
-    add_func "stringLength" (arrow ty_string ty_int) 1 (fun mm argv -> of_int mm (to_string argv.[0]).Length)
-    add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (System.String(char (to_int argv.[0]), 1)))
+    add_func "stringLength" (arrow ty_string ty_int) 1 (fun mm argv -> ofInt mm (to_string argv.[0]).Length)
+    add_func "stringOfChar" (arrow ty_char ty_string) 1 (fun mm argv -> of_string mm (System.String(char (toInt argv.[0]), 1)))
 
     add_func "stringOfCharArray" (arrow (ty_array ty_char) ty_string) 1
         (fun mm argv ->
             let ary = to_malarray argv.[0]
             let buf = Array.zeroCreate<char> ary.Count
             for i = 0 to ary.Count - 1 do
-                buf.[i] <- char (to_int ary.Storage.[i])
+                buf.[i] <- char (toInt ary.Storage.[i])
             of_string mm (System.String(buf)))
 
     add_func "charArrayOfString" (arrow ty_string (ty_array ty_char)) 1
@@ -191,7 +191,7 @@ let tyenv_std, alloc_std, genv_std =
             let v = array_create mm s.Length
             let ary = to_malarray v
             for i = 0 to s.Length - 1 do
-                ary.Storage.[i] <- of_int mm (int s.[i])
+                ary.Storage.[i] <- ofInt mm (int s.[i])
             ary.Count <- s.Length
             v)
 
@@ -206,43 +206,43 @@ let tyenv_std, alloc_std, genv_std =
     add_func "stringSub" (arrow3 ty_string ty_int ty_int ty_string) 3
         (fun mm argv ->
             let s = to_string argv.[0]
-            let start = to_int argv.[1]
-            let count = to_int argv.[2]
+            let start = toInt argv.[1]
+            let count = toInt argv.[2]
             try of_string mm (s.Substring(start, count))
             with _ -> mal_raise_Invalid_argument())
 
     add_func "stringStartWith" (Tarrow ("s", ty_string, Tarrow ("starting", ty_string, ty_bool))) 2
-        (fun (mm : memory_manager) (argv : MalValue array) ->
+        (fun (mm : MemoryManager) (argv : MalValue array) ->
             let s = to_string argv.[0]
             let starting = to_string argv.[1]
             of_bool (s.StartsWith(starting)))
 
     add_func "stringEndWith" (Tarrow ("s", ty_string, Tarrow ("ending", ty_string, ty_bool))) 2
-        (fun (mm : memory_manager) (argv : MalValue array) ->
+        (fun (mm : MemoryManager) (argv : MalValue array) ->
             let s = to_string argv.[0]
             let ending = to_string argv.[1]
             of_bool (s.EndsWith(ending)))
     
     add_func "stringToLower" ty_ss 1
-        (fun (mm : memory_manager) (argv : MalValue array) ->
+        (fun (mm : MemoryManager) (argv : MalValue array) ->
             of_string mm ((to_string argv.[0]).ToLowerInvariant()))
 
     add_func "stringIndexOf" (Tarrow ("s", ty_string, Tarrow ("pattern", ty_string, Tarrow ("startIndex", ty_int, ty_int)))) 3
-        (fun (mm : memory_manager) (argv : MalValue array) ->
+        (fun (mm : MemoryManager) (argv : MalValue array) ->
             let s = to_string argv.[0]
             let pattern = to_string argv.[1]
-            let startIndex = to_int argv.[2]
-            try of_int mm (s.IndexOf(pattern, startIndex))
+            let startIndex = toInt argv.[2]
+            try ofInt mm (s.IndexOf(pattern, startIndex))
             with _ -> mal_raise_Invalid_argument())
 
     add_func "pathGetExtension" ty_ss 1
-        (fun (mm : memory_manager) (argv : MalValue array) ->
+        (fun (mm : MemoryManager) (argv : MalValue array) ->
             try
                 of_string mm (System.IO.Path.GetExtension(to_string argv.[0]))
             with _ -> mal_failwith mm "Path contains invalid character")
 
     let ty_array_add = arrow2 (ty_array ty_a) ty_a ty_unit
-    let array_add_func (mm : memory_manager) (argv : MalValue array) =
+    let array_add_func (mm : MemoryManager) (argv : MalValue array) =
         array_add mm argv.[0] argv.[1]
         Value.unit
     add_func "arrayAdd" ty_array_add 2 array_add_func
@@ -251,7 +251,7 @@ let tyenv_std, alloc_std, genv_std =
     add_func "arrayRemoveAt" (arrow2 (ty_array ty_a) ty_int ty_unit) 2
         (fun mm argv ->
             try
-                array_remove_at mm argv.[0] (to_int argv.[1])
+                array_remove_at mm argv.[0] (toInt argv.[1])
                 Value.unit
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range())
 
@@ -265,28 +265,28 @@ let tyenv_std, alloc_std, genv_std =
             let process_memory_bytes = int (GC.GetTotalMemory(false))
             let mal_memory_bytes = System.Threading.Volatile.Read(&mm.counter)
             let percent = int (100.0 * float mal_memory_bytes / float mm.bytes_stop_exec)
-            Value.block_create mm 0 [| of_int mm process_memory_bytes; of_int mm mal_memory_bytes; of_int mm percent |])
+            Value.block_create mm 0 [| ofInt mm process_memory_bytes; ofInt mm mal_memory_bytes; ofInt mm percent |])
 
     add_uu "collect" (fun mm -> collect())
 
-    add_func "stringOfFloat" (arrow ty_float ty_string) 1 (fun mm argv -> of_string mm (Misc.string_of_float (to_float argv.[0])))
+    add_func "stringOfFloat" (arrow ty_float ty_string) 1 (fun mm argv -> of_string mm (Misc.string_of_float (toFloat argv.[0])))
 
     add_func "floatOfString" (arrow ty_string ty_float) 1
         (fun mm argv ->
             match Double.TryParse(to_string argv.[0]) with
-            | true, x -> of_float mm x
+            | true, x -> ofFloat mm x
             | false, _ -> mal_failwith mm "float_of_string: Invalid argument")
 
     add_func "charOfInt" (arrow ty_int ty_char) 1
         (fun mm argv ->
-            let i = to_int argv.[0]
+            let i = toInt argv.[0]
             if int Char.MinValue <= i && i <= int Char.MaxValue
             then argv.[0]
             else mal_failwith mm "char_of_int: given int is out of range")
 
     add_func "intOfChar" (arrow ty_char ty_int) 1 (fun mm argv -> argv.[0])
     add_func "raise" (arrow ty_exn ty_a) 1 (fun mm argv -> raise (MalException argv.[0]))
-    add_func "hash" (arrow ty_a ty_int) 1 (fun mm argv -> of_int mm (MalCompare.hash argv.[0]))
+    add_func "hash" (arrow ty_a ty_int) 1 (fun mm argv -> ofInt mm (MalCompare.hash argv.[0]))
 
     let interp = Interpreter(memory_manager_create_default(), tyenv, alloc, genv)
     let src = """

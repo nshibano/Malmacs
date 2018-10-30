@@ -87,7 +87,7 @@ type State =
     | Failure = 3
     | Paused = 5
 
-type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalValue array) =
+type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValue array) =
 
     let mutable state = State.Clear
     let mutable accu : MalValue = unit
@@ -220,21 +220,21 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalVal
                 Array.map (fun (arity, ofs, alphabets, dfa, codes : code array) ->
                     let closures = Array.zeroCreate<MalValue> codes.Length
                     let lexer_obj : int * HashSet<int> * DfaNode * MalValue array = (arity, alphabets, dfa, closures)
-                    let lexing2 (mm : memory_manager) (frame : MalValue array) =
+                    let lexing2 (mm : MemoryManager) (frame : MalValue array) =
                         let arity, alphabets, dfa, closures = (frame.[1] :?> MalObj).Obj :?>  int * HashSet<int> * DfaNode * MalValue array
                         let lexbuf = frame.[2 + arity - 1]
                         let lexbuf_fields = get_fields lexbuf
                         let source = to_string lexbuf_fields.[0]
-                        let scan_start_pos = to_int lexbuf_fields.[3]
+                        let scan_start_pos = toInt lexbuf_fields.[3]
                         let eof = to_bool lexbuf_fields.[4]
                         if (scan_start_pos = source.Length && eof) || (scan_start_pos > source.Length) then
                             mal_raise_Match_failure ()
                         else
                             match MalLex.Exec alphabets dfa source scan_start_pos with
                             | Some (end_pos, action_idx, eof) ->
-                                lexbuf_fields.[1] <- of_int mm scan_start_pos
-                                lexbuf_fields.[2] <- of_int mm end_pos
-                                lexbuf_fields.[3] <- of_int mm end_pos
+                                lexbuf_fields.[1] <- ofInt mm scan_start_pos
+                                lexbuf_fields.[2] <- ofInt mm end_pos
+                                lexbuf_fields.[3] <- ofInt mm end_pos
                                 lexbuf_fields.[4] <- of_bool eof
                                 Array.append [| closures.[action_idx] |] (Array.sub frame 2 (frame.Length - 2))
                             | None ->
@@ -795,24 +795,24 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalVal
                     frame.pc <- Tag.Forloop_EvalFirst
                     start_code first
                 | Tag.Forloop_EvalFirst ->
-                    frame.i <- to_int accu
+                    frame.i <- toInt accu
                     frame.pc <- Tag.Forloop_EvalLast
                     start_code last
                 | Tag.Forloop_EvalLast ->
-                    frame.j <- to_int accu
+                    frame.j <- toInt accu
                     if dir = dirflag.Upto && frame.i <= frame.j then
                         frame.pc <- Tag.Forloop_To
-                        env.[ofs] <- of_int mm frame.i
+                        env.[ofs] <- ofInt mm frame.i
                         start_code body
                     elif dir = dirflag.Downto && frame.i >= frame.j then
                         frame.pc <- Tag.Forloop_Downto
-                        env.[ofs] <- of_int mm frame.i
+                        env.[ofs] <- ofInt mm frame.i
                         start_code body
                     else stack_discard_top()
                 | Tag.Forloop_To ->
                     if frame.i < frame.j then
                         frame.i <- frame.i + 1
-                        env.[ofs] <- of_int mm frame.i
+                        env.[ofs] <- ofInt mm frame.i
                         start_code body
                     else
                         accu <- unit
@@ -820,7 +820,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalVal
                 | Tag.Forloop_Downto ->
                     if frame.i > frame.j then
                         frame.i <- frame.i - 1
-                        env.[ofs] <- of_int mm frame.i
+                        env.[ofs] <- ofInt mm frame.i
                         start_code body
                     else
                         accu <- unit
@@ -909,7 +909,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalVal
                 elif stack_topidx + 1 >= mm.maximum_stack_depth then
                     state <- State.Failure
                     send_message (Message.UncatchableException "Stack overflow")
-                elif not (check_free_memory mm 0) then
+                elif not (checkFreeMemory mm 0) then
                     state <- State.Failure
                     send_message (Message.UncatchableException "Insufficient memory")
 
@@ -925,7 +925,7 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalVal
         env.[new_ofs] <- env.[orig_ofs]
     
     let obj_of_value_cache = Dictionary<Type, HashSet<MalValue> -> MalValue -> obj>()
-    let value_of_obj_cache = Dictionary<Type, memory_manager -> obj -> MalValue>()
+    let value_of_obj_cache = Dictionary<Type, MemoryManager -> obj -> MalValue>()
     
     let stacktrace limit (sb : StringBuilder) =
         let pfn fmt = Printf.kprintf (fun s -> sb.AppendLine s |> ignore) fmt
@@ -1050,13 +1050,13 @@ type Interpreter(mm : memory_manager, tyenv : tyenv, alloc : alloc, env : MalVal
         let obj = Value.obj_of_value obj_of_value_cache tyenv (touch_create()) typeof<'T> value
         obj :?> 'T
 
-    member this.Fun<'T, 'U>(name : string, arg_names : string list, f : memory_manager -> 'T -> 'U) =
+    member this.Fun<'T, 'U>(name : string, arg_names : string list, f : MemoryManager -> 'T -> 'U) =
         clear()
-        let v = Value.wrap_fsharp_func tyenv obj_of_value_cache value_of_obj_cache typeof<memory_manager -> 'T -> 'U> f
+        let v = Value.wrap_fsharp_func tyenv obj_of_value_cache value_of_obj_cache typeof<MemoryManager -> 'T -> 'U> f
         let ty = Types.typeexpr_of_type tyenv (Dictionary()) arg_names typeof<'T -> 'U>
         set name v ty Immutable |> ignore
 
-    member this.Fun<'T, 'U>(name : string, f : memory_manager -> 'T -> 'U) =
+    member this.Fun<'T, 'U>(name : string, f : MemoryManager -> 'T -> 'U) =
         this.Fun<'T, 'U>(name, [], f)
 
     member this.RegisterAbstractType(name : string, ty : Type) =

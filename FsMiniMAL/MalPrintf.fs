@@ -160,7 +160,7 @@ let exec_cmds cmds (argv : MalValue array) =
                  | 'X' -> sprintf_X
                  | _ -> raise InvalidFormatString).[int fmt.Flags]
             
-            let n = Value.to_int argv.[i]
+            let n = Value.toInt argv.[i]
             let s = f w n
             sb.Add(s)
             i <- i + 1
@@ -182,12 +182,12 @@ let exec_cmds cmds (argv : MalValue array) =
                  | 'G' -> sprintf_G
                  | _ -> raise InvalidFormatString).[int fmt.Flags]
             
-            let x = Value.to_float argv.[i]
+            let x = Value.toFloat argv.[i]
             let s = f w p x
             sb.Add(s)
             i <- i + 1
         | Spec({ TypeChar = 'r' } as fmt) ->
-            let x = Value.to_float argv.[i]
+            let x = Value.toFloat argv.[i]
             let s = Misc.string_of_float x
             sb.Add(s)
             i <- i + 1            
