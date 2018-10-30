@@ -47,7 +47,7 @@ and Repl() as this =
     let textArea = new OpaqueIMEControl()
     let vscroll = new VScrollBar()
 
-    let mutable mal : (Interpreter * Value ref) option = None
+    let mutable mal : (Interpreter * MalVar) option = None
     let chunkQueue = List<string>()
     let messageQueue = List<Message>()
     let runningQueue = List<MalThread>()
@@ -158,7 +158,7 @@ and Repl() as this =
     let key_press (ev : KeyPressEventArgs) =
         if (not ev.Handled) && '\x20' < ev.KeyChar then // enter, space and tab are excluded here
             if state <> Compositioning then
-                commandInput (MalString(ev.KeyChar, 1))
+                commandInput (String(ev.KeyChar, 1))
                 upd()
             ev.Handled <- true
 
@@ -171,7 +171,7 @@ and Repl() as this =
             let interp = Interpreter(interp.Runtime, Typechk.tyenv_clone interp.Tyenv, alloc.Create(), [||])
             interp.MessageHook <- interp.MessageHook
             interp.Store <- false
-            interp.StartApply([| malproc.Value; interp.ValueOfObj(MhighlightingRequired e) |])
+            interp.StartApply([| malproc.Content; interp.ValueOfObj(MhighlightingRequired e) |])
             runningQueue.Add(MThighlighting (e, interp))
             e.LastlyHighlightingInitiatedContentId <- e.Doc.ContentId
         | Some _, EHShighlighting -> e.HighlightingState <- EHSneedRestart
@@ -200,7 +200,7 @@ and Repl() as this =
                 let interp = Interpreter(interp.Runtime, Typechk.tyenv_clone interp.Tyenv, alloc.Create(), [||])
                 interp.Store <- false
                 interp.MessageHook <- interp.MessageHook
-                interp.StartApply([| malproc.Value; interp.ValueOfObj(message) |])
+                interp.StartApply([| malproc.Content; interp.ValueOfObj(message) |])
                 runningQueue.Add(MTmessage (message, interp))
             
             // if the thread on the queue top is a highlighting thread, and it needs to be restarted, and its intterupt flag is set, restart it. Repeat that until there is no more.
@@ -308,7 +308,7 @@ and Repl() as this =
         | FsMiniMAL.Message.EvaluationComplete (tyenv, _, ty) when FsMiniMAL.Unify.same_type tyenv ty FsMiniMAL.Types.ty_unit -> ()
         | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.En cols msg)
     
-    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : Value array) =
+    let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : memory_manager) (argv : MalValue array) =
         let e = to_obj argv.[0] :?> Editor
         let range = interp.ObjOfValue<Range> argv.[1]
         let doc = e.Doc
@@ -350,7 +350,7 @@ and Repl() as this =
                 | _ -> dontcare()
             member x.Dispose() = () }
 
-    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : memory_manager) (argv : Value array) =
+    let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : memory_manager) (argv : MalValue array) =
         let e = to_obj argv.[0] :?> Editor
         let ary = to_malarray argv.[1]
         let mutable state = 0
@@ -358,8 +358,8 @@ and Repl() as this =
         let mutable latestValue = mal.ValueOfObj<ColorInfo>(Doc.ColorInfo_Default)
         let mutable latestObj = Doc.ColorInfo_Default
         let colorInfoAt i =
-            if i < ary.count then
-                let v = ary.storage.[i]
+            if i < ary.Count then
+                let v = ary.Storage.[i]
                 if LanguagePrimitives.PhysicalEquality v latestValue then
                     latestObj
                 else
@@ -423,7 +423,7 @@ and Repl() as this =
         MalLibs.add interp
 
         interp.Fun("printString", (fun mm s -> logInput s))
-        interp.Set("printUValue", Vfunc (1, (fun mm argv ->
+        interp.Set("printUValue", MalFunc (1, (fun mm argv ->
             let s = 
                 if box argv.[0] = null
                 then "<null>\r\n"
@@ -463,14 +463,14 @@ and Repl() as this =
             | None -> ""))
 
         interp.Fun("editorGetTextLength", fun mm (e : Editor) -> e.Doc.CharCount)
-        interp.Set("editorGetTextFromRange", Vcoroutine (2, editorGetTextFromCharRangeCoroutineStarter interp), interp.Typeof<Editor -> Range -> string>())
+        interp.Set("editorGetTextFromRange", MalCoroutine (2, editorGetTextFromCharRangeCoroutineStarter interp), interp.Typeof<Editor -> Range -> string>())
         interp.Do("fun editorGetText (e : editor) = editorGetTextFromRange e { rBegin = 0, rEnd = editorGetTextLength e }")
 
         interp.Fun("editorSetText", (fun mm (e : Editor) (s : string) ->
             malEnsureEditorIsOk mm e
             e.EditorText <- s))
         interp.Fun("editorInitiateHighlighting", (fun mm (e : Editor) -> this.InitiateHighlighting(e)))
-        interp.Set("editorSetColor", Vcoroutine (2, setColorCoroutineStarter interp), interp.Typeof<Editor -> ColorInfo array -> unit>())
+        interp.Set("editorSetColor", MalCoroutine (2, setColorCoroutineStarter interp), interp.Typeof<Editor -> ColorInfo array -> unit>())
         interp.Fun("editorGetLineIndexFromCharPos", (fun mm (e : Editor) pos ->
             try Doc.getLineIndexFromCharPos e.Doc pos
             with :? IndexOutOfRangeException -> mal_raise_Index_out_of_range()))
@@ -939,7 +939,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         if (not ev.Handled) && '\x20' < ev.KeyChar then // enter, space, tab はここで除外される
             match state with
             | Compositioning -> ()
-            | _ -> input_upd false (MalString(ev.KeyChar, 1))
+            | _ -> input_upd false (String(ev.KeyChar, 1))
             ev.Handled <- true
 
     let textAreaPaint (ev : PaintEventArgs) =

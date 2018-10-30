@@ -17,7 +17,7 @@ open FsMiniMAL.Syntax
 open FsMiniMAL.Typechk
 
 
-let taskCoroutineStarter name (f : memory_manager -> Value array -> Value) (mm : memory_manager) (argv : Value array) =
+let taskCoroutineStarter name (f : memory_manager -> MalValue array -> MalValue) (mm : memory_manager) (argv : MalValue array) =
     let task = Task.Run(fun () -> f mm argv)
 
     { new IMalCoroutine with
@@ -28,7 +28,7 @@ let taskCoroutineStarter name (f : memory_manager -> Value array -> Value) (mm :
             with exn -> mal_failwith mm (name + ": " + exn.InnerException.Message)
         member x.Dispose() = () }
 
-let regexMatchCoroutineStarter (mm : memory_manager) (argv : Value array) =
+let regexMatchCoroutineStarter (mm : memory_manager) (argv : MalValue array) =
     let input = to_string argv.[0]
     let pattern = to_string argv.[1]
     let options = enum<RegexOptions>(to_int argv.[2])
@@ -40,7 +40,7 @@ let regexMatchCoroutineStarter (mm : memory_manager) (argv : Value array) =
             if not task.IsCompleted then Thread.Sleep(1)
         member x.IsFinished = task.IsCompleted
         member x.Result =
-            try Vobj task.Result
+            try MalObj(task.Result) :> MalValue
             with exn -> mal_failwith mm ("regexMatch: " + exn.InnerException.Message)
         member x.Dispose() = () }
 
@@ -55,7 +55,7 @@ let add (mal : Interpreter) =
         try Regex.IsMatch(input, pattern, enum<RegexOptions>(options), regex_timeout)
         with exn -> mal_failwith mm ("regex_is_match: " + exn.Message)))
     
-    mal.Set("regexMatch", Vcoroutine (3, regexMatchCoroutineStarter), mal.Typeof<string -> string -> int -> Match>(["input"; "pattern"; "options"]))
+    mal.Set("regexMatch", MalCoroutine (3, regexMatchCoroutineStarter), mal.Typeof<string -> string -> int -> Match>(["input"; "pattern"; "options"]))
 
     mal.Fun("regexMatches", ["input"; "pattern"; "options"], (fun mm (input : string) (pattern : string) (options : int) ->
         try

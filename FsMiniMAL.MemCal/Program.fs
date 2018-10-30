@@ -16,7 +16,7 @@ let main argv =
     let many = 100_000
 
     let test constr =
-        let ary = Array.zeroCreate<Value> many
+        let ary = Array.zeroCreate<MalValue> many
         let x0 = get_total_memory()
         for i = 0 to ary.Length - 1 do
             ary.[i] <- constr dummy_mm i
