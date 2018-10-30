@@ -4,6 +4,8 @@
 
 A Programmable Text Editor for Windows.
 
+![Demo](demo.png)
+
 ## Introduction
 
 Malmacs is a programmable text editor for Windows. It has common text editor UI similar to Notepad. And it features powerful script language interpreter.
