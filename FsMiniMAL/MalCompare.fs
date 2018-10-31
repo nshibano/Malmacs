@@ -2,7 +2,6 @@
 
 open System
 open System.Collections.Generic
-open System.Diagnostics
 
 open Value
 
@@ -15,7 +14,7 @@ type Mode =
     | Less_equal
     | Greater_equal
 
-type Frame = { a : MalValue; b : MalValue; mutable i : int }
+type Frame = { v0 : MalValue; v1 : MalValue; mutable i : int }
 
 let [<Literal>] Uncomparable = 0x80000000
 let [<Literal>] Nan          = 0x80000001
@@ -40,14 +39,14 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
     let start (v0 : MalValue) (v1 : MalValue) =
         match v0.Kind, v1.Kind with
         | MalValueKind.INT, MalValueKind.INT ->
-            accu <- compare (v0 :?> MalInt).Get (v1 :?> MalInt).Get
+            accu <- compare (toInt v0) (toInt v1)
         | MalValueKind.INT, MalValueKind.BLOCK ->
-            accu <- compare (v0 :?> MalInt).Get (v1 :?> MalBlock).Tag
+            accu <- compare (toInt v0) (get_tag v1)
         | MalValueKind.BLOCK, MalValueKind.INT ->
-            accu <- compare (v0 :?> MalBlock).Tag (v1 :?> MalInt).Get
+            accu <- compare (get_tag v0) (toInt v1)
         | MalValueKind.FLOAT, MalValueKind.FLOAT ->
-            let x0 = (v0 :?> MalFloat).Get
-            let x1 = (v1 :?> MalFloat).Get
+            let x0 = toFloat v0
+            let x1 = toFloat v1
             if mode = Compare then
                 accu <- x0.CompareTo(x1)
             else
@@ -56,17 +55,13 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
                 else
                     accu <- x0.CompareTo(x1)
         | MalValueKind.STRING, MalValueKind.STRING ->
-            let s0 = (v0 :?> MalString).Get
-            let s1 = (v1 :?> MalString).Get
-            accu <- Math.Sign(String.CompareOrdinal(s0, s1))
+            accu <- Math.Sign(String.CompareOrdinal(to_string v0, to_string v1))
         | MalValueKind.BLOCK, MalValueKind.BLOCK -> 
-            let tag0 = (v0 :?> MalBlock).Tag
-            let tag1 = (v1 :?> MalBlock).Tag
-            let d = compare tag0 tag1
+            let d = compare (get_tag v0) (get_tag v1)
             if d <> 0 then
                 accu <- d
             else
-                stack_push { a = v0; b = v1; i = 0 }
+                stack_push { v0 = v0; v1 = v1; i = 0 }
         | MalValueKind.ARRAY, MalValueKind.ARRAY ->
             let ary0 = v0 :?> MalArray
             let ary1 = v1 :?> MalArray
@@ -74,7 +69,7 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
             if d <> 0 || ary0.Count = 0  then
                 accu <- d
             else
-                stack_push { a = v0; b = v1; i = 0 }
+                stack_push { v0 = v0; v1 = v1; i = 0 }
         | (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE),
           (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE) ->
             accu <- Uncomparable
@@ -90,10 +85,10 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
         let tickCountAtStart = Environment.TickCount
         while (Environment.TickCount - tickCountAtStart < sliceTicks) && not (isFinished()) do
             let frame = stack.[stack_topidx]
-            match frame.a.Kind, frame.b.Kind with
+            match frame.v0.Kind, frame.v1.Kind with
             | MalValueKind.BLOCK, MalValueKind.BLOCK ->
-                let fields0 = (frame.a :?> MalBlock).Fields
-                let fields1 = (frame.b :?> MalBlock).Fields
+                let fields0 = get_fields frame.v0
+                let fields1 = get_fields frame.v1
                 if frame.i < fields0.Length - 1 then
                     start fields0.[frame.i] fields1.[frame.i]
                     frame.i <- frame.i + 1
@@ -103,8 +98,8 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
                     stack_discard_top()
                     start fields0.[frame.i] fields1.[frame.i]
             | MalValueKind.ARRAY, MalValueKind.ARRAY ->
-                let ary0 = frame.a :?> MalArray
-                let ary1 = frame.b :?> MalArray
+                let ary0 = frame.v0 :?> MalArray
+                let ary1 = frame.v1 :?> MalArray
                 if frame.i < ary0.Count then
                     start ary0.Storage.[frame.i] ary1.Storage.[frame.i]
                     frame.i <- frame.i + 1
