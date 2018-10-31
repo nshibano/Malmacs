@@ -154,7 +154,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
     | _ when path.Contains(value) ->
             textNode st "..."
     | Ttuple l, _ ->
-        list_loop st (path.Add(value)) "(" ")" (Seq.zip l (get_fields value))
+        list_loop st (path.Add(value)) "(" ")" (Seq.zip l (getFields value))
     | Tconstr(type_id.ARRAY, [a]), MalValueKind.ARRAY ->
         let ary = value :?> MalArray
         let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }
@@ -164,7 +164,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
             seq {
                 let mutable x = value
                 let mutable path = path
-                while (try Value.get_tag x = 1 with _ -> raise InvalidValue) do
+                while (try Value.getTag x = 1 with _ -> raise InvalidValue) do
                     //match x.Kind with
                     //    | ValueKind.VKblock (* Vblock (1, _, _) *) -> true
                     //    | Vint (0, _) -> false
@@ -172,7 +172,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                     path <- path.Add(x)
                     let hd, tl =
                         try
-                            let fields = Value.get_fields x
+                            let fields = Value.getFields x
                             fields.[0], fields.[1]
                         with _ -> raise InvalidValue
                     yield value_loop st path 0 a hd
@@ -185,8 +185,8 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                     //| _ -> raise InvalidValue }
         seq_loop st "[" "]" items
     | Tconstr(type_id.EXN, _), _ ->
-        let tag = get_tag value
-        let fields = get_fields value
+        let tag = getTag value
+        let fields = getFields value
         let name, info = st.tyenv.exn_constructors.[tag]
         if fields.Length <> info.ci_args.Length then textNode st textInvalid
         else
@@ -230,11 +230,11 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
             | Kvariant casel ->
                 let name, _, fieldTypes =
                     try
-                        let tag = Value.get_tag value
+                        let tag = Value.getTag value
                         List.find (fun (_, tag', _) -> tag = tag') casel
                     with _ -> raise InvalidValue
                 let fields =
-                    try Value.get_fields value
+                    try Value.getFields value
                     with _ -> raise InvalidValue
 
                 if fieldTypes.Length = 0 then
@@ -270,7 +270,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                 //| _ -> textNode st textInvalid
             | Krecord l ->
                 try
-                    let fields = Value.get_fields value
+                    let fields = Value.getFields value
                     let path = path.Add(value)
                     let items =
                         Seq.zip l fields

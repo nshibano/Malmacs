@@ -235,52 +235,52 @@ let toFloat (v : MalValue) = (v :?> MalFloat).Get
 
 let zero = ofInt 0
 let one = ofInt 1
-let neg_one = ofInt (-1)
+let negOne = ofInt (-1)
 
-let of_compare n =
+let ofCompare n =
     match n with
     | 1 -> one
     | 0 -> zero
-    | -1 -> neg_one
+    | -1 -> negOne
     | _ -> dontcare()
 
 let unit = zero
 let ``false`` = zero
 let ``true`` = one
 
-let of_bool b = if b then ``true`` else ``false``
+let ofBool b = if b then ``true`` else ``false``
 
-let to_bool v =
+let toBool v =
     match toInt v with
     | 0 -> false
     | 1 -> true
     | _ -> dontcare()
 
-let to_string (v : MalValue) = (v :?> MalString).Get
+let toString (v : MalValue) = (v :?> MalString).Get
 
-let of_string (mm : MemoryManager) (s : string) =
+let ofString (mm : MemoryManager) (s : string) =
     Interlocked.Add(&mm.counter, sizeof_string s.Length) |> ignore
     MalString(s, mm) :> MalValue
 
-let to_obj (v : MalValue) = (v :?> MalObj).Obj
+let toObj (v : MalValue) = (v :?> MalObj).Obj
 
-let of_obj (o : obj) = MalObj(o) :> MalValue
+let ofObj (o : obj) = MalObj(o) :> MalValue
 
-let block_create (mm : MemoryManager) tag (fields : MalValue array) =
+let blockCreate (mm : MemoryManager) tag (fields : MalValue array) =
     Interlocked.Add(&mm.counter, sizeof_block fields.Length) |> ignore
     MalBlock(tag, fields, mm) :> MalValue
 
-let get_tag (v : MalValue) =
+let getTag (v : MalValue) =
     match v.Kind with
     | MalValueKind.INT -> toInt v
     | MalValueKind.BLOCK -> (v :?> MalBlock).Tag
     | _ -> dontcare()
 
-let value_array_empty : MalValue array = [||]
+let valueArrayEmpty : MalValue array = [||]
 
-let get_fields (v : MalValue) =
+let getFields (v : MalValue) =
     match v.Kind with
-    | MalValueKind.INT -> value_array_empty
+    | MalValueKind.INT -> valueArrayEmpty
     | MalValueKind.BLOCK -> (v :?> MalBlock).Fields
     | _ -> dontcare()
 
@@ -289,7 +289,7 @@ let to_malarray (v : MalValue) = v :?> MalArray
 exception MalException of MalValue
 exception MalUncatchableException of string
 
-let mal_failwith mm msg = raise (MalException (block_create mm tag_exn_Failure [| of_string mm msg |]))
+let mal_failwith mm msg = raise (MalException (blockCreate mm tag_exn_Failure [| ofString mm msg |]))
 
 let mal_Division_by_zero = ofInt tag_exn_Division_by_zero
 let mal_raise_Division_by_zero() = raise (MalException mal_Division_by_zero)
@@ -383,7 +383,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> 
             if ty = typeof<unit> then
                 (fun (touch : HashSet<MalValue>) (value : MalValue) -> box ())
             elif ty = typeof<bool> then
-                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_bool value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (toBool value))
             elif ty = typeof<int32> then
                 (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (toInt value))
             elif ty = typeof<char> then
@@ -391,9 +391,9 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> 
             elif ty = typeof<float> then
                 (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (toFloat value))
             elif ty = typeof<string> then
-                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (to_string value))
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> box (toString value))
             elif tyenv.registered_abstract_types.ContainsKey(ty) then
-                (fun (touch : HashSet<MalValue>) (value : MalValue) -> to_obj value)
+                (fun (touch : HashSet<MalValue>) (value : MalValue) -> toObj value)
             elif ty.IsArray then
                 let ty_elem = ty.GetElementType()
                 (fun (touch : HashSet<MalValue>) (value : MalValue) ->
@@ -408,7 +408,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> 
                 let constr = FSharpValue.PreComputeTupleConstructor(ty)
                 let types = FSharpType.GetTupleElements(ty)
                 (fun (touch : HashSet<MalValue>) (value : MalValue) ->
-                    let fields = get_fields value
+                    let fields = getFields value
                     touch.Add(value) |> ignore
                     let objs = Array.map2 (fun ty field -> obj_of_value cache tyenv touch ty field) types fields
                     touch.Remove(value) |> ignore
@@ -417,7 +417,7 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> 
                 let constr = FSharpValue.PreComputeRecordConstructor(ty)
                 let types = Array.map (fun (info : PropertyInfo) -> info.PropertyType) (FSharpType.GetRecordFields(ty))
                 (fun (touch : HashSet<MalValue>) (value : MalValue) ->
-                    let fields = get_fields value
+                    let fields = getFields value
                     touch.Add(value) |> ignore
                     let objs = Array.map2 (fun ty value -> obj_of_value cache tyenv touch ty value) types fields
                     touch.Remove(value) |> ignore
@@ -427,9 +427,9 @@ let rec obj_of_value (cache : Dictionary<Type, HashSet<MalValue> -> MalValue -> 
                 let constrs = Array.map (fun (case : UnionCaseInfo) -> FSharpValue.PreComputeUnionConstructor(case)) cases
                 let case_field_types = Array.map (fun (case : UnionCaseInfo) -> Array.map (fun (prop : PropertyInfo) -> prop.PropertyType) (case.GetFields())) cases
                 (fun (touch : HashSet<MalValue>) (value : MalValue) ->
-                    let tag = get_tag value
+                    let tag = getTag value
                     let types = case_field_types.[tag]
-                    let fields = get_fields value
+                    let fields = getFields value
                     touch.Add(value) |> ignore
                     let objs = Array.map2 (fun ty value -> obj_of_value cache tyenv touch ty value) types fields
                     touch.Remove(value) |> ignore
@@ -447,7 +447,7 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
             if ty = typeof<unit> then
                 (fun (mm : MemoryManager) (obj : obj) -> unit)
             elif ty = typeof<bool> then
-                (fun (mm : MemoryManager) (obj : obj) -> of_bool (obj :?> bool))
+                (fun (mm : MemoryManager) (obj : obj) -> ofBool (obj :?> bool))
             elif ty = typeof<int32> then
                 (fun (mm : MemoryManager) (obj : obj) -> ofInt (obj :?> int32))
             elif ty = typeof<char> then
@@ -455,9 +455,9 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
             elif ty = typeof<float> then
                 (fun (mm : MemoryManager) (obj : obj) -> ofFloat (obj :?> float))
             elif ty = typeof<string> then
-                (fun (mm : MemoryManager) (obj : obj) -> of_string mm (obj :?> string))
+                (fun (mm : MemoryManager) (obj : obj) -> ofString mm (obj :?> string))
             elif tyenv.registered_abstract_types.ContainsKey(ty) then
-                (fun (mm : MemoryManager) (obj : obj) -> of_obj obj)
+                (fun (mm : MemoryManager) (obj : obj) -> ofObj obj)
             elif ty.IsArray then
                 let ty_elem = ty.GetElementType()
                 (fun (mm : MemoryManager) (obj : obj) ->
@@ -473,14 +473,14 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
                 (fun (mm : MemoryManager) (obj : obj) -> 
                     let objs = reader obj
                     let values = Array.map2 (fun ty obj -> value_of_obj cache tyenv ty mm obj) types objs
-                    block_create mm 0 values)
+                    blockCreate mm 0 values)
             elif FSharpType.IsRecord ty then
                 let reader = FSharpValue.PreComputeRecordReader(ty)
                 let types = Array.map (fun (info : PropertyInfo) -> info.PropertyType) (FSharpType.GetRecordFields(ty))
                 (fun (mm : MemoryManager) (obj : obj) -> 
                     let objs = reader obj
                     let values = Array.map2 (fun ty obj -> value_of_obj cache tyenv ty mm obj) types objs
-                    block_create mm 0 values)
+                    blockCreate mm 0 values)
             elif FSharpType.IsUnion ty then
                 let tag_reader = FSharpValue.PreComputeUnionTagReader(ty)
                 let cases = FSharpType.GetUnionCases(ty)
@@ -497,7 +497,7 @@ let rec value_of_obj (cache : Dictionary<Type, MemoryManager -> obj -> MalValue>
                             (fun (mm : MemoryManager) (obj : obj) ->
                                 let field_objs = case_reader obj
                                 let field_vals = Array.map2 (fun ty obj -> value_of_obj cache tyenv ty mm obj) field_types field_objs
-                                block_create mm i field_vals)) cases
+                                blockCreate mm i field_vals)) cases
                 (fun (mm : MemoryManager) (obj : obj) ->
                     let tag = tag_reader obj
                     fs.[tag] mm obj)

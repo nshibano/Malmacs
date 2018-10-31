@@ -139,7 +139,7 @@ let exec_cmds cmds (argv : MalValue array) =
         match cmd with
         | Text s -> sb.Add(s)
         | Spec({ TypeChar = 's' } as spec) -> 
-            let s = to_string argv.[i]
+            let s = toString argv.[i]
             
             let s = 
                 if 0 <= spec.Width then 

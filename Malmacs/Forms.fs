@@ -309,7 +309,7 @@ and Repl() as this =
         | _ -> logInput (FsMiniMAL.Printer.print_message FsMiniMAL.Printer.lang.En cols msg)
     
     let editorGetTextFromCharRangeCoroutineStarter (interp : Interpreter) (mm : MemoryManager) (argv : MalValue array) =
-        let e = to_obj argv.[0] :?> Editor
+        let e = toObj argv.[0] :?> Editor
         let range = interp.ObjOfValue<Range> argv.[1]
         let doc = e.Doc
         let sb = StringBuilder()
@@ -344,14 +344,14 @@ and Repl() as this =
             member x.IsFinished = state <> 0
             member x.Result =
                 match state with
-                | 1 -> of_string mm (sb.ToString())
+                | 1 -> ofString mm (sb.ToString())
                 | 2 -> mal_raise_Invalid_argument()
                 | 3 -> mal_failwith mm "editorGetText: The editor has been disposed."
                 | _ -> dontcare()
             member x.Dispose() = () }
 
     let setColorCoroutineStarter (mal : FsMiniMAL.Interpreter) (mm : MemoryManager) (argv : MalValue array) =
-        let e = to_obj argv.[0] :?> Editor
+        let e = toObj argv.[0] :?> Editor
         let ary = to_malarray argv.[1]
         let mutable state = 0
         let mutable i = 0

@@ -41,9 +41,9 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
         | MalValueKind.INT, MalValueKind.INT ->
             accu <- compare (toInt v0) (toInt v1)
         | MalValueKind.INT, MalValueKind.BLOCK ->
-            accu <- compare (toInt v0) (get_tag v1)
+            accu <- compare (toInt v0) (getTag v1)
         | MalValueKind.BLOCK, MalValueKind.INT ->
-            accu <- compare (get_tag v0) (toInt v1)
+            accu <- compare (getTag v0) (toInt v1)
         | MalValueKind.FLOAT, MalValueKind.FLOAT ->
             let x0 = toFloat v0
             let x1 = toFloat v1
@@ -55,9 +55,9 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
                 else
                     accu <- x0.CompareTo(x1)
         | MalValueKind.STRING, MalValueKind.STRING ->
-            accu <- Math.Sign(String.CompareOrdinal(to_string v0, to_string v1))
+            accu <- Math.Sign(String.CompareOrdinal(toString v0, toString v1))
         | MalValueKind.BLOCK, MalValueKind.BLOCK -> 
-            let d = compare (get_tag v0) (get_tag v1)
+            let d = compare (getTag v0) (getTag v1)
             if d <> 0 then
                 accu <- d
             else
@@ -87,8 +87,8 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
             let frame = stack.[stack_topidx]
             match frame.v0.Kind, frame.v1.Kind with
             | MalValueKind.BLOCK, MalValueKind.BLOCK ->
-                let fields0 = get_fields frame.v0
-                let fields1 = get_fields frame.v1
+                let fields0 = getFields frame.v0
+                let fields1 = getFields frame.v1
                 if frame.i < fields0.Length - 1 then
                     start fields0.[frame.i] fields1.[frame.i]
                     frame.i <- frame.i + 1
@@ -115,13 +115,13 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
             mal_failwith mm ((match mode with Compare -> "compare: " | _ -> "equal: ") + message)
         else
             match mode with
-            | Compare -> of_compare accu
-            | Equal -> of_bool (accu = 0)
-            | Not_equal -> of_bool (not (accu = 0))
-            | Less_than -> of_bool (accu = -1)
-            | Greater_than -> of_bool (accu = 1)
-            | Less_equal -> of_bool (accu = -1 || accu = 0)
-            | Greater_equal -> of_bool (accu = 0 || accu = 1)
+            | Compare -> ofCompare accu
+            | Equal -> ofBool (accu = 0)
+            | Not_equal -> ofBool (not (accu = 0))
+            | Less_than -> ofBool (accu = -1)
+            | Greater_than -> ofBool (accu = 1)
+            | Less_equal -> ofBool (accu = -1 || accu = 0)
+            | Greater_equal -> ofBool (accu = 0 || accu = 1)
 
     do start argv.[0] argv.[1]
 
@@ -146,7 +146,7 @@ let hash v =
         match v.Kind with
         | MalValueKind.INT -> combine (Value.toInt v)
         | MalValueKind.FLOAT -> combine ((Value.toFloat v).GetHashCode())
-        | MalValueKind.STRING -> combine ((Value.to_string v).GetHashCode())
+        | MalValueKind.STRING -> combine ((Value.toString v).GetHashCode())
         | MalValueKind.BLOCK ->
             let block = v :?> MalBlock
             combine block.Tag

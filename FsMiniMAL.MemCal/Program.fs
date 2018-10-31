@@ -30,8 +30,8 @@ let main argv =
     let sizeof_float = test (fun mm i -> ofFloat (float i))    
     printfn "sizeof float: %.1f" sizeof_float
 
-    let sizeof_block_len0 = test (fun mm i -> block_create mm 0 (Array.create 0 unit))
-    let sizeof_block_len1000 = test (fun mm i -> block_create mm 0 (Array.create 1000 unit))
+    let sizeof_block_len0 = test (fun mm i -> blockCreate mm 0 (Array.create 0 unit))
+    let sizeof_block_len1000 = test (fun mm i -> blockCreate mm 0 (Array.create 1000 unit))
     let block_overhead = sizeof_block_len0
     let block_increment = (sizeof_block_len1000 - sizeof_block_len0) / 1000.0
     printfn "block overhead: %.1f" block_overhead
@@ -45,8 +45,8 @@ let main argv =
     printfn "array increment: %.1f" array_increment
 
     // We don't use String('a', 0) here because it returns shared constant object.
-    let sizeof_string_len1 = test (fun mm i -> of_string mm (System.String('a', 1))) 
-    let sizeof_string_len1000 = test (fun mm i -> of_string mm (System.String('a', 1000)))
+    let sizeof_string_len1 = test (fun mm i -> ofString mm (System.String('a', 1))) 
+    let sizeof_string_len1000 = test (fun mm i -> ofString mm (System.String('a', 1000)))
     let string_increment = (sizeof_string_len1000 - sizeof_string_len1) / 999.0
     let string_overhead = sizeof_string_len1 - string_increment
     printfn "string overhead: %.1f" string_overhead

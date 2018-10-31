@@ -29,8 +29,8 @@ let taskCoroutineStarter name (f : MemoryManager -> MalValue array -> MalValue) 
         member x.Dispose() = () }
 
 let regexMatchCoroutineStarter (mm : MemoryManager) (argv : MalValue array) =
-    let input = to_string argv.[0]
-    let pattern = to_string argv.[1]
+    let input = toString argv.[0]
+    let pattern = toString argv.[1]
     let options = enum<RegexOptions>(toInt argv.[2])
     let f() = Regex.Match(input, pattern, options, TimeSpan(0, 0, 10))
     let task = Task.Run(f)

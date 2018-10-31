@@ -106,7 +106,7 @@ and expression (alloc : alloc) (tailcall_info : (string * int) option) (se : Syn
                 | [] -> UEconst Value.zero
                 | hd :: tl -> UEblock (1, [| expression alloc None hd; loop tl |])
             loop l
-        | SEstring s -> UEconst (of_string dummy_mm s)
+        | SEstring s -> UEconst (ofString dummy_mm s)
         | SEurecord (l, None) ->
             let ary = Array.zeroCreate (List.length l)
             for (index, _, e) in l do

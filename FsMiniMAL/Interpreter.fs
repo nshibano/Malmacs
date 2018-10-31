@@ -216,10 +216,10 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     let lexing2 (mm : MemoryManager) (frame : MalValue array) =
                         let arity, alphabets, dfa, closures = (frame.[1] :?> MalObj).Obj :?>  int * HashSet<int> * DfaNode * MalValue array
                         let lexbuf = frame.[2 + arity - 1]
-                        let lexbuf_fields = get_fields lexbuf
-                        let source = to_string lexbuf_fields.[0]
+                        let lexbuf_fields = getFields lexbuf
+                        let source = toString lexbuf_fields.[0]
                         let scan_start_pos = toInt lexbuf_fields.[3]
-                        let eof = to_bool lexbuf_fields.[4]
+                        let eof = toBool lexbuf_fields.[4]
                         if (scan_start_pos = source.Length && eof) || (scan_start_pos > source.Length) then
                             mal_raise_Match_failure ()
                         else
@@ -228,7 +228,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                                 lexbuf_fields.[1] <- ofInt scan_start_pos
                                 lexbuf_fields.[2] <- ofInt end_pos
                                 lexbuf_fields.[3] <- ofInt end_pos
-                                lexbuf_fields.[4] <- of_bool eof
+                                lexbuf_fields.[4] <- ofBool eof
                                 Array.append [| closures.[action_idx] |] (Array.sub frame 2 (frame.Length - 2))
                             | None ->
                                 mal_raise_Match_failure ()
@@ -417,7 +417,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     if frame.i < field_exprs.Length then
                         start_code field_exprs.[frame.i]
                     else
-                        accu <- block_create mm tag frame.fields
+                        accu <- blockCreate mm tag frame.fields
                         stack_discard_top()
                 | _ -> dontcare()
             | UEarray fields ->
@@ -462,7 +462,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     if frame.i < idxl.Length then
                         start_code exprl.[frame.i]
                     else
-                        accu <- block_create mm frame.tag frame.fields
+                        accu <- blockCreate mm frame.tag frame.fields
                         stack_discard_top()
                 | _ -> dontcare()
             | UEapply (expl, _) ->
@@ -718,7 +718,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                             do_raise mal_Match_failure
                 | Tag.Case_EvalWhen ->
                     let _, _, result = cases.[frame.i]
-                    if to_bool accu then
+                    if toBool accu then
                         frame.pc <- Tag.Case_EvalResult
                         start_code result
                     else
@@ -748,7 +748,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     start_code code_test
                 |  Tag.If_EvalTest ->
                     frame := Tag.If_EvalResult
-                    if to_bool accu
+                    if toBool accu
                     then start_code code_true
                     else start_code code_false
                 | Tag.If_EvalResult ->
@@ -819,7 +819,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                     frame := Tag.While_EvalCond
                     start_code cond
                 | Tag.While_EvalCond ->
-                    if to_bool accu then
+                    if toBool accu then
                         frame := Tag.While_EvalBody
                         start_code body
                     else
