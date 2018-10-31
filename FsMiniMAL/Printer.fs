@@ -120,7 +120,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
             else
                 s
         textNode st s
-    | Tconstr(type_id.CHAR, []), MalValueKind.INT (* Vint(i, _) when int Char.MinValue <= i && i <= int Char.MaxValue *) ->
+    | Tconstr(type_id.CHAR, []), MalValueKind.INT ->
         let i = (value :?> MalInt).Get
         if int Char.MinValue <= i && i <= int Char.MaxValue then
             textNode st ("'" + escaped_char (char i) + "'")
@@ -165,10 +165,6 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                 let mutable x = value
                 let mutable path = path
                 while (try Value.getTag x = 1 with _ -> raise InvalidValue) do
-                    //match x.Kind with
-                    //    | ValueKind.VKblock (* Vblock (1, _, _) *) -> true
-                    //    | Vint (0, _) -> false
-                    //    | _ -> raise InvalidValue) do                    
                     path <- path.Add(x)
                     let hd, tl =
                         try
@@ -177,12 +173,6 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                         with _ -> raise InvalidValue
                     yield value_loop st path 0 a hd
                     x <- tl }
-                    //match x with
-                    //| Vblock (1, [| hd; tl |], _) ->
-                    //    path <- path.Add(x)
-                    //    yield value_loop st path 0 a hd
-                    //    x <- tl
-                    //| _ -> raise InvalidValue }
         seq_loop st "[" "]" items
     | Tconstr(type_id.EXN, _), _ ->
         let tag = getTag value
@@ -212,8 +202,6 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
             | Kbasic ->
                 let abstr() = textNode st "<abstr>"
                 if value.Kind = MalValueKind.OBJ then
-                //match value with
-                //| Vobj o ->
                     if (value :?> MalObj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
                         let m = (value :?> MalObj).Obj :?> System.Text.RegularExpressions.Match
                         let maxPreviewLength = 10
@@ -224,7 +212,6 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                                 textNode st (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\"...>" m.Success m.Index m.Length (m.Value.Substring(0, maxPreviewLength)))
                         else textNode st "<match Success=false>"
                     else abstr()
-                //| _ -> abstr()
                 else abstr()
             | Kabbrev ty -> value_loop st path level (subst sl ty) value
             | Kvariant casel ->
@@ -251,23 +238,6 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                     section.Add(fields)
                     let node = Section section
                     if level > 0 then parenthesize node else node
-
-                //match value with
-                //| Vint (tag, _) ->
-                //    let name, _, _ = List.find (fun (_, tag', _) -> tag = tag') casel
-                //    textNode st name
-                //| Vblock (tag, fields, _) ->
-                //    let name, _, tyl' = List.find (fun (_, tag', _) -> tag = tag') casel
-                //    let section = Section.Create(Flow, 0)
-                //    section.Add(textNode st name)
-                //    let fields =
-                //        (match tyl' with
-                //        | [ ty' ] -> value_loop st (path.Add(value)) 1 (subst sl ty') fields.[0]
-                //        | _ -> list_loop st (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) tyl') fields))
-                //    section.Add(fields)
-                //    let node = Section section
-                //    if level > 0 then parenthesize node else node
-                //| _ -> textNode st textInvalid
             | Krecord l ->
                 try
                     let fields = Value.getFields value
@@ -281,18 +251,6 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                             Section section)
                     seq_loop st "{" "}" items
                 with _ -> textNode st textInvalid 
-                //match value with
-                //| Vblock (_, fields, _) ->
-                //    let path = path.Add(value)
-                //    let items =
-                //        Seq.zip l fields
-                //        |> Seq.map (fun ((name : string, ty_gen, _ : access), value) ->
-                //            let section = Section.Create(Flow, 0)
-                //            section.Add(textNode st (name + " ="))
-                //            section.Add(value_loop st path 0 (subst sl ty_gen) value)
-                //            Section section)
-                //    seq_loop st "{" "}" items
-                //| _ -> textNode st textInvalid
     | _ -> raise InvalidValue
 
 and seq_loop (st : printer_state) (lp : string) (rp : string) (items : Node seq) : Node =
