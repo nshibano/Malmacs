@@ -147,7 +147,7 @@ let tyenv_std, alloc_std, genv_std =
             let count = toInt argv.[2]
             if not (0 <= count && 0 <= start && start + count <= ary.Count) then mal_raise_Index_out_of_range()
             let sub = array_create mm count
-            let subary = to_malarray sub
+            let subary = sub :?> MalArray
             Array.blit ary.Storage start subary.Storage 0 count
             subary.Count <- count
             sub)

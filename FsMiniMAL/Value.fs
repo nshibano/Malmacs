@@ -316,7 +316,7 @@ let array_create (mm : MemoryManager) (needed_capacity : int) =
 
 let array_add (mm : MemoryManager) (ary : MalValue) (item : MalValue) =
     let ary = ary :?> MalArray
-    let capacity = ary.Storage.Length //if isNull ary.Storage then 0 else storage.Length
+    let capacity = ary.Storage.Length
     if capacity < ary.Count + 1 then
         let new_capacity =
             try find_next_capacity_exn mm.maximum_array_length (ary.Count + 1)
@@ -324,7 +324,7 @@ let array_add (mm : MemoryManager) (ary : MalValue) (item : MalValue) =
         let increased_bytes = value_array_increment * (new_capacity - capacity)
         if not (checkFreeMemory mm increased_bytes) then mal_raise_Insufficient_memory()
         let new_storage = Array.zeroCreate<MalValue> new_capacity
-        if not (isNull ary.Storage) then Array.blit ary.Storage 0 new_storage 0 ary.Count
+        Array.blit ary.Storage 0 new_storage 0 ary.Count
         ary.Storage <- new_storage
         Interlocked.Add(&ary.MemoryManager.counter, increased_bytes) |> ignore
     ary.Storage.[ary.Count] <- item
