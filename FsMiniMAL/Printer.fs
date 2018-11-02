@@ -77,14 +77,14 @@ and SectionKind =
 
 let escaped_char c =
     match c with
-    | '\n' -> @"\n"
-    | '\t' -> @"\t"
-    | '\b' -> @"\b"
-    | '\r' -> @"\r"
-    | '\\' -> @"\\"
-    | '"'  -> @"\"""
+    | '\n' -> "\\n"
+    | '\t' -> "\\t"
+    | '\b' -> "\\b"
+    | '\r' -> "\\r"
+    | '\\' -> "\\\\"
+    | '"'  -> "\\\""
     | _ ->
-        if System.Char.IsControl c
+        if Char.IsControl c
         then sprintf "\\%03d" (int c)
         else String(c, 1)
 
@@ -113,7 +113,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
     | Tarrow _, _ -> textNode st "<fun>"
     | Ttuple [], _ -> textNode st "()"
     | Tconstr(type_id.INT, []), MalValueKind.INT ->
-        let s = (value :?> Value.MalInt).Get.ToString()
+        let s = (toInt value).ToString()
         let s =
             if 0 < level && s.[0] = '-' then
                 "(" + s + ")"
@@ -121,12 +121,12 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                 s
         textNode st s
     | Tconstr(type_id.CHAR, []), MalValueKind.INT ->
-        let i = (value :?> MalInt).Get
+        let i = toInt value
         if int Char.MinValue <= i && i <= int Char.MaxValue then
             textNode st ("'" + escaped_char (char i) + "'")
         else raise InvalidValue
     | Tconstr(type_id.FLOAT, []), MalValueKind.FLOAT ->
-        let x = (value :?> MalFloat).Get
+        let x = toFloat value
         let s = string_of_float x
         let s =
             if 0 < level && s.[0] = '-' then
@@ -135,7 +135,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                 s
         textNode st s
     | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
-        let s = (value :?> MalString).Get
+        let s = toString value
         let limit = 1000
         if limit < s.Length then
             let sb = StringBuilder()
