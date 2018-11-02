@@ -117,8 +117,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
         let s =
             if 0 < level && s.[0] = '-' then
                 "(" + s + ")"
-            else
-                s
+            else s
         textNode st s
     | Tconstr(type_id.CHAR, []), MalValueKind.INT ->
         let i = toInt value
@@ -131,8 +130,7 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
         let s =
             if 0 < level && s.[0] = '-' then
                 "(" + s + ")"
-            else
-                s
+            else s
         textNode st s
     | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
         let s = toString value
@@ -140,15 +138,13 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
         if limit < s.Length then
             let sb = StringBuilder()
             for i = 0 to limit - 1 do
-                let ec = escaped_char s.[i]
-                sb.Add(ec)
+                sb.Add(escaped_char s.[i])
             textNode st (sprintf "<string len=%d \"%s\"...>" s.Length (sb.ToString()))
         else
             let sb = StringBuilder()
             sb.Add('"')
             for i = 0 to s.Length - 1 do
-                let ec = escaped_char s.[i]
-                sb.Add(ec)
+                sb.Add(escaped_char s.[i])
             sb.Add('"')
             textNode st (sb.ToString())
     | _ when path.Contains(value) ->
@@ -253,6 +249,9 @@ let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (lev
                 with _ -> textNode st textInvalid 
     | _ -> raise InvalidValue
 
+and list_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
+    seq_loop st lp rp (Seq.map (fun (ty, v) -> value_loop st path 0 ty v) items)
+
 and seq_loop (st : printer_state) (lp : string) (rp : string) (items : Node seq) : Node =
     let section = Section.Create(Flow, lp.Length)
 
@@ -280,8 +279,6 @@ and seq_loop (st : printer_state) (lp : string) (rp : string) (items : Node seq)
     section.Weld rp
     Section section
 
-and list_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
-    seq_loop st lp rp (Seq.map (fun (ty, v) -> value_loop st path 0 ty v) items)
 
 let node_of_value (tyenv : tyenv) ty value =
     try
