@@ -228,12 +228,10 @@ type Printer(tyenv : tyenv, limit : int) =
 
     and seq_loop (lp : string) (rp : string) (items : Node seq) : Node =
         let accu = List()
-        let mutable first = true
 
         let comma() =
-            if not first then
+            if accu.Count > 0 then
                 weld accu.[accu.Count - 1] ","
-            first <- false
 
         let enum = items.GetEnumerator()
         while
