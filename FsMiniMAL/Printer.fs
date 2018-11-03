@@ -37,6 +37,19 @@ let print_list p sep =
     | hd :: tl -> 
         p hd
         List.iter (fun a -> sep(); p a) tl
+
+let escaped_char c =
+    match c with
+    | '\n' -> "\\n"
+    | '\t' -> "\\t"
+    | '\b' -> "\\b"
+    | '\r' -> "\\r"
+    | '\\' -> "\\\\"
+    | '"'  -> "\\\""
+    | _ ->
+        if Char.IsControl c
+        then sprintf "\\%03d" (int c)
+        else String(c, 1)
     
 type Node = 
     | Text of StringBuilder
@@ -75,29 +88,7 @@ and SectionKind =
     | Flow
     | Vertical
 
-let escaped_char c =
-    match c with
-    | '\n' -> "\\n"
-    | '\t' -> "\\t"
-    | '\b' -> "\\b"
-    | '\r' -> "\\r"
-    | '\\' -> "\\\\"
-    | '"'  -> "\\\""
-    | _ ->
-        if Char.IsControl c
-        then sprintf "\\%03d" (int c)
-        else String(c, 1)
-
 exception InvalidValue
- 
-type printer_state =
-    { tyenv : tyenv
-      mutable char_counter : int
-      limit : int }
-
-let textNode (st : printer_state)  (s : string) =
-    st.char_counter <- st.char_counter + s.Length
-    Text (StringBuilder(s))
 
 let parenthesize (node : Node) =
     let section = Section.Create(Flow, 1)
@@ -108,181 +99,190 @@ let parenthesize (node : Node) =
 
 let textInvalid = "<invalid>"
 
-let rec value_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) (level : int) (ty : type_expr) (value : MalValue) : Node =
-    match repr ty, value.Kind with
-    | Tarrow _, _ -> textNode st "<fun>"
-    | Ttuple [], _ -> textNode st "()"
-    | Tconstr(type_id.INT, []), MalValueKind.INT ->
-        let s = (toInt value).ToString()
-        let s =
-            if 0 < level && s.[0] = '-' then
-                "(" + s + ")"
-            else s
-        textNode st s
-    | Tconstr(type_id.CHAR, []), MalValueKind.INT ->
-        let i = toInt value
-        if int Char.MinValue <= i && i <= int Char.MaxValue then
-            textNode st ("'" + escaped_char (char i) + "'")
-        else raise InvalidValue
-    | Tconstr(type_id.FLOAT, []), MalValueKind.FLOAT ->
-        let x = toFloat value
-        let s = string_of_float x
-        let s =
-            if 0 < level && s.[0] = '-' then
-                "(" + s + ")"
-            else s
-        textNode st s
-    | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
-        let s = toString value
-        let limit = 1000
-        if limit < s.Length then
-            let sb = StringBuilder()
-            for i = 0 to limit - 1 do
-                sb.Add(escaped_char s.[i])
-            textNode st (sprintf "<string len=%d \"%s\"...>" s.Length (sb.ToString()))
-        else
-            let sb = StringBuilder()
-            sb.Add('"')
-            for i = 0 to s.Length - 1 do
-                sb.Add(escaped_char s.[i])
-            sb.Add('"')
-            textNode st (sb.ToString())
-    | _ when path.Contains(value) ->
-            textNode st "..."
-    | Ttuple l, _ ->
-        list_loop st (path.Add(value)) "(" ")" (Seq.zip l (getFields value))
-    | Tconstr(type_id.ARRAY, [a]), MalValueKind.ARRAY ->
-        let ary = value :?> MalArray
-        let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }
-        list_loop st (path.Add(value)) "[|" "|]" items
-    | Tconstr(type_id.LIST, [a]), _ ->
-        let items = 
-            seq {
-                let mutable x = value
-                let mutable path = path
-                while (try Value.getTag x = 1 with _ -> raise InvalidValue) do
-                    path <- path.Add(x)
-                    let hd, tl =
-                        try
-                            let fields = Value.getFields x
-                            fields.[0], fields.[1]
-                        with _ -> raise InvalidValue
-                    yield value_loop st path 0 a hd
-                    x <- tl }
-        seq_loop st "[" "]" items
-    | Tconstr(type_id.EXN, _), _ ->
-        let tag = getTag value
-        let fields = getFields value
-        let name, info = st.tyenv.exn_constructors.[tag]
-        if fields.Length <> info.ci_args.Length then textNode st textInvalid
-        else
-            if fields.Length = 0 then
-                textNode st name
-            else
-                let name, info = st.tyenv.exn_constructors.[tag]
-                let section = Section.Create(Flow, 0)
-                section.Add(textNode st name)
-                let fields =
-                    match info.ci_args with
-                    | [ ty_arg ] -> value_loop st (path.Add(value)) 1 ty_arg fields.[0]
-                    | args -> list_loop st (path.Add(value)) "(" ")" (Seq.zip args fields)
-                section.Add(fields)
-                let node = Section section
-                if level > 0 then parenthesize node else node
-    | Tconstr(id, tyl), _ ->
-        match st.tyenv.types_of_id.TryFind id with
-        | None -> textNode st textInvalid
-        | Some info ->
-            let sl = List.zip info.ti_params tyl
-            match info.ti_kind with
-            | Kbasic ->
-                let abstr() = textNode st "<abstr>"
-                if value.Kind = MalValueKind.OBJ then
-                    if (value :?> MalObj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
-                        let m = (value :?> MalObj).Obj :?> System.Text.RegularExpressions.Match
-                        let maxPreviewLength = 10
-                        if m.Success then
-                            if m.Length < maxPreviewLength then
-                                textNode st (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\">" m.Success m.Index m.Length m.Value)
-                            else
-                                textNode st (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\"...>" m.Success m.Index m.Length (m.Value.Substring(0, maxPreviewLength)))
-                        else textNode st "<match Success=false>"
-                    else abstr()
-                else abstr()
-            | Kabbrev ty -> value_loop st path level (subst sl ty) value
-            | Kvariant casel ->
-                let name, _, fieldTypes =
-                    try
-                        let tag = Value.getTag value
-                        List.find (fun (_, tag', _) -> tag = tag') casel
-                    with _ -> raise InvalidValue
-                let fields =
-                    try Value.getFields value
-                    with _ -> raise InvalidValue
+type Printer(tyenv : tyenv, limit : int) =
+    let mutable char_counter = 0
 
-                if fieldTypes.Length = 0 then
-                    if fields.Length = 0 then
-                        textNode st name
-                    else raise InvalidValue
+    let textNode (s : string) =
+        char_counter <- char_counter + s.Length
+        Text (StringBuilder(s))
+    
+
+    let rec value_loop (path : ImmutableHashSet<MalValue>) (level : int) (ty : type_expr) (value : MalValue) : Node =
+        match repr ty, value.Kind with
+        | Tarrow _, _ -> textNode "<fun>"
+        | Ttuple [], _ -> textNode "()"
+        | Tconstr(type_id.INT, []), MalValueKind.INT ->
+            let s = (toInt value).ToString()
+            let s =
+                if 0 < level && s.[0] = '-' then
+                    "(" + s + ")"
+                else s
+            textNode s
+        | Tconstr(type_id.CHAR, []), MalValueKind.INT ->
+            let i = toInt value
+            if int Char.MinValue <= i && i <= int Char.MaxValue then
+                textNode ("'" + escaped_char (char i) + "'")
+            else raise InvalidValue
+        | Tconstr(type_id.FLOAT, []), MalValueKind.FLOAT ->
+            let x = toFloat value
+            let s = string_of_float x
+            let s =
+                if 0 < level && s.[0] = '-' then
+                    "(" + s + ")"
+                else s
+            textNode s
+        | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
+            let s = toString value
+            let limit = 1000
+            if limit < s.Length then
+                let sb = StringBuilder()
+                for i = 0 to limit - 1 do
+                    sb.Add(escaped_char s.[i])
+                textNode (sprintf "<string len=%d \"%s\"...>" s.Length (sb.ToString()))
+            else
+                let sb = StringBuilder()
+                sb.Add('"')
+                for i = 0 to s.Length - 1 do
+                    sb.Add(escaped_char s.[i])
+                sb.Add('"')
+                textNode (sb.ToString())
+        | _ when path.Contains(value) ->
+                textNode "..."
+        | Ttuple l, _ ->
+            list_loop (path.Add(value)) "(" ")" (Seq.zip l (getFields value))
+        | Tconstr(type_id.ARRAY, [a]), MalValueKind.ARRAY ->
+            let ary = value :?> MalArray
+            let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }
+            list_loop (path.Add(value)) "[|" "|]" items
+        | Tconstr(type_id.LIST, [a]), _ ->
+            let items = 
+                seq {
+                    let mutable x = value
+                    let mutable path = path
+                    while (try Value.getTag x = 1 with _ -> raise InvalidValue) do
+                        path <- path.Add(x)
+                        let hd, tl =
+                            try
+                                let fields = Value.getFields x
+                                fields.[0], fields.[1]
+                            with _ -> raise InvalidValue
+                        yield value_loop path 0 a hd
+                        x <- tl }
+            seq_loop "[" "]" items
+        | Tconstr(type_id.EXN, _), _ ->
+            let tag = getTag value
+            let fields = getFields value
+            let name, info = tyenv.exn_constructors.[tag]
+            if fields.Length <> info.ci_args.Length then textNode textInvalid
+            else
+                if fields.Length = 0 then
+                    textNode name
                 else
+                    let name, info = tyenv.exn_constructors.[tag]
                     let section = Section.Create(Flow, 0)
-                    section.Add(textNode st name)
+                    section.Add(textNode name)
                     let fields =
-                        (match fieldTypes with
-                        | [ ty' ] -> value_loop st (path.Add(value)) 1 (subst sl ty') fields.[0]
-                        | _ -> list_loop st (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) fieldTypes) fields))
+                        match info.ci_args with
+                        | [ ty_arg ] -> value_loop (path.Add(value)) 1 ty_arg fields.[0]
+                        | args -> list_loop (path.Add(value)) "(" ")" (Seq.zip args fields)
                     section.Add(fields)
                     let node = Section section
                     if level > 0 then parenthesize node else node
-            | Krecord l ->
-                try
-                    let fields = Value.getFields value
-                    let path = path.Add(value)
-                    let items =
-                        Seq.zip l fields
-                        |> Seq.map (fun ((name : string, ty_gen, _ : access), value) ->
-                            let section = Section.Create(Flow, 0)
-                            section.Add(textNode st (name + " ="))
-                            section.Add(value_loop st path 0 (subst sl ty_gen) value)
-                            Section section)
-                    seq_loop st "{" "}" items
-                with _ -> textNode st textInvalid 
-    | _ -> raise InvalidValue
+        | Tconstr(id, tyl), _ ->
+            match tyenv.types_of_id.TryFind id with
+            | None -> textNode textInvalid
+            | Some info ->
+                let sl = List.zip info.ti_params tyl
+                match info.ti_kind with
+                | Kbasic ->
+                    let abstr() = textNode "<abstr>"
+                    if value.Kind = MalValueKind.OBJ then
+                        if (value :?> MalObj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
+                            let m = (value :?> MalObj).Obj :?> System.Text.RegularExpressions.Match
+                            let maxPreviewLength = 10
+                            if m.Success then
+                                if m.Length < maxPreviewLength then
+                                    textNode (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\">" m.Success m.Index m.Length m.Value)
+                                else
+                                    textNode (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\"...>" m.Success m.Index m.Length (m.Value.Substring(0, maxPreviewLength)))
+                            else textNode "<match Success=false>"
+                        else abstr()
+                    else abstr()
+                | Kabbrev ty -> value_loop path level (subst sl ty) value
+                | Kvariant casel ->
+                    let name, _, fieldTypes =
+                        try
+                            let tag = Value.getTag value
+                            List.find (fun (_, tag', _) -> tag = tag') casel
+                        with _ -> raise InvalidValue
+                    let fields =
+                        try Value.getFields value
+                        with _ -> raise InvalidValue
 
-and list_loop (st : printer_state) (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
-    seq_loop st lp rp (Seq.map (fun (ty, v) -> value_loop st path 0 ty v) items)
+                    if fieldTypes.Length = 0 then
+                        if fields.Length = 0 then
+                            textNode name
+                        else raise InvalidValue
+                    else
+                        let section = Section.Create(Flow, 0)
+                        section.Add(textNode name)
+                        let fields =
+                            (match fieldTypes with
+                            | [ ty' ] -> value_loop (path.Add(value)) 1 (subst sl ty') fields.[0]
+                            | _ -> list_loop (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) fieldTypes) fields))
+                        section.Add(fields)
+                        let node = Section section
+                        if level > 0 then parenthesize node else node
+                | Krecord l ->
+                    try
+                        let fields = Value.getFields value
+                        let path = path.Add(value)
+                        let items =
+                            Seq.zip l fields
+                            |> Seq.map (fun ((name : string, ty_gen, _ : access), value) ->
+                                let section = Section.Create(Flow, 0)
+                                section.Add(textNode (name + " ="))
+                                section.Add(value_loop path 0 (subst sl ty_gen) value)
+                                Section section)
+                        seq_loop "{" "}" items
+                    with _ -> textNode textInvalid 
+        | _ -> raise InvalidValue
 
-and seq_loop (st : printer_state) (lp : string) (rp : string) (items : Node seq) : Node =
-    let section = Section.Create(Flow, lp.Length)
+    and list_loop (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
+        seq_loop lp rp (Seq.map (fun (ty, v) -> value_loop path 0 ty v) items)
 
-    let mutable first = true
+    and seq_loop (lp : string) (rp : string) (items : Node seq) : Node =
+        let section = Section.Create(Flow, lp.Length)
 
-    let comma() =
-        if not first then
-            section.Weld ","
-        first <- false
+        let mutable first = true
 
-    let enum = items.GetEnumerator()
-    while
-        (match enum.MoveNext(), st.char_counter < st.limit with
-            | true, true ->
-                comma()
-                section.Add(enum.Current)
-                true
-            | true, false ->
-                comma()
-                section.Add(textNode st "...")
-                false
-            | false, _ -> false) do ()
+        let comma() =
+            if not first then
+                section.Weld ","
+            first <- false
+
+        let enum = items.GetEnumerator()
+        while
+            (match enum.MoveNext(), char_counter < limit with
+                | true, true ->
+                    comma()
+                    section.Add(enum.Current)
+                    true
+                | true, false ->
+                    comma()
+                    section.Add(textNode "...")
+                    false
+                | false, _ -> false) do ()
     
-    section.PreWeld(lp)
-    section.Weld rp
-    Section section
+        section.PreWeld(lp)
+        section.Weld rp
+        Section section
 
+    member this.ValueLoop ty value = value_loop (ImmutableHashSet.Create<MalValue>(Misc.PhysicalEqualityComparer)) 0 ty value
 
 let node_of_value (tyenv : tyenv) ty value =
     try
-        value_loop { tyenv = tyenv; char_counter = 0; limit = 1000 } (ImmutableHashSet.Create<MalValue>(Misc.PhysicalEqualityComparer)) 0 ty value
+        Printer(tyenv, 1000).ValueLoop ty value
     with InvalidValue ->
         Text (StringBuilder(textInvalid))
 
