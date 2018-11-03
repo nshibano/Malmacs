@@ -35,10 +35,11 @@ namespace FsMiniMAL.PrinterTest
             var cols = (int)(this.Width / w) - 5;
             g.FillRectangle(Brushes.LightGray, 0f, 0f, cols * w, this.Height);
             var interp = FsMiniMAL.Top.createInterpreter();
-            //i.Do("array_init 100 (fn n -> n * n)");
-            //interp.Do("array_init 30 (fn n -> array_init 5 (fn m -> begin val n = n + 1; val m = m + 1; var accu = 1; for u = 0 to m - 1 do accu <- accu * n; accu end))");
+            //interp.Do("arrayInit 100 (fn n -> n * n)");
+            //interp.Do("arrayInit 30 (fn n -> arrayInit 5 (fn m -> begin val n = n + 1; val m = m + 1; var accu = 1; for u = 0 to m - 1 do accu <- accu * n; accu end))");
             //interp.Do("[|[|[|[|1,2,3|],[|4,5,6|]|]|]|]");
             interp.Do("(100000, 1000000, -100000000, Some (-1000000000, 100000))");
+            //interp.Do("arrayInit 40 (fn i -> ref (i * i * i))");
             var (tyenv, val, ty) = interp.Result;
             var (s, levels) = Printer.print_value_colored(tyenv, cols, ty, val);
             g.DrawString(cols.ToString(), font, Brushes.Black, new PointF(0f, 0f), StringFormat.GenericTypographic);
