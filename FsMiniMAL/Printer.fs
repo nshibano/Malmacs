@@ -12,25 +12,6 @@ open Unify
 open Typechk
 open Value
 
-type lang =
-    | En
-    | Ja
-
-let create_tvar_assoc_table () = 
-    let dict = Dictionary<type_var, string>(Misc.PhysicalEqualityComparer)
-    (fun tv ->
-        match dict.TryGetValue(tv) with
-        | true, name -> name
-        | false, _ ->
-            let name = 
-                let n = dict.Count / 26
-                let c = dict.Count % 26
-                if n > 0
-                then System.Char.ConvertFromUtf32(c + 97) + string n
-                else System.Char.ConvertFromUtf32(c + 97)
-            dict.Add(tv, name)
-            name)
-
 let print_list p sep = 
     function 
     | [] -> ()
@@ -357,6 +338,21 @@ let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
             | None -> dontcare()
     loop true prio ty
 
+let create_tvar_assoc_table () = 
+    let dict = Dictionary<type_var, string>(Misc.PhysicalEqualityComparer)
+    (fun tv ->
+        match dict.TryGetValue(tv) with
+        | true, name -> name
+        | false, _ ->
+            let name = 
+                let n = dict.Count / 26
+                let c = dict.Count % 26
+                if n > 0
+                then System.Char.ConvertFromUtf32(c + 97) + string n
+                else System.Char.ConvertFromUtf32(c + 97)
+            dict.Add(tv, name)
+            name)
+
 let node_of_scheme (tyenv : tyenv) ty =
     let name_of_var = create_tvar_assoc_table()
     node_of_type_expr tyenv name_of_var true 0 ty
@@ -464,6 +460,10 @@ let print_definition (define : tyenv) cols name (info : value_info) (value : Mal
     let node = Section sxn2
     update_sizes node
     fst (string_of_node cols node)
+
+type lang =
+    | En
+    | Ja
 
 let string_of_kind lang kind upper =
     match lang with
