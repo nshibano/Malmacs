@@ -39,31 +39,8 @@ type Node =
 and Section = 
     { Kind : SectionKind
       Indent : int
-      Items : List<Node>
+      Items : Node array
       mutable Size : int }
-
-    static member Create(kind, indent) = 
-        { Kind = kind
-          Indent = indent
-          Items = List()
-          Size = 0 }
-
-    member this.Add(s : string) = this.Items.Add(Text (StringBuilder(s)))
-    member this.Add(e : Node) = this.Items.Add(e)
-    member this.Weld(s : string) =
-        if this.Items.Count = 0 then
-            this.Items.Add(Text (StringBuilder s))
-        else
-            match this.Items.[this.Items.Count - 1] with
-            | Text sb -> sb.Add(s)
-            | Section sub -> sub.Weld(s)
-    member this.PreWeld(s : string) =
-        if this.Items.Count = 0 then
-            this.Items.Add(Text (StringBuilder s))
-        else
-            match this.Items.[0] with
-            | Text sb -> sb.Insert(0, s) |> ignore
-            | Section sub -> sub.PreWeld(s)
 
 and SectionKind =
     | Flow
@@ -71,12 +48,30 @@ and SectionKind =
 
 exception InvalidValue
 
+let createSection kind indent (nodes : Node array) =
+    Section
+        { Kind = kind
+          Indent = indent
+          Items = nodes
+          Size = 0 }
+
+let rec weld (node : Node) (s : string) =
+    match node with
+    | Text sb -> sb.Add(s) |> ignore
+    | Section sect ->
+        weld sect.Items.[sect.Items.Length - 1] s
+
+let rec preWeld (s : string) (node : Node) =
+    match node with
+    | Text sb -> sb.Insert(0, s) |> ignore
+    | Section sect ->
+        preWeld s sect.Items.[0]
+
 let parenthesize (node : Node) =
-    let section = Section.Create(Flow, 1)
-    section.Add(node)
-    section.PreWeld("(")
-    section.Weld(")")
-    Section section
+    let node = createSection Flow 1 [| node |]
+    preWeld "(" node
+    weld node ")"
+    node
 
 let textInvalid = "<invalid>"
 
@@ -86,7 +81,6 @@ type Printer(tyenv : tyenv, limit : int) =
     let textNode (s : string) =
         char_counter <- char_counter + s.Length
         Text (StringBuilder(s))
-    
 
     let rec value_loop (path : ImmutableHashSet<MalValue>) (level : int) (ty : type_expr) (value : MalValue) : Node =
         match repr ty, value.Kind with
@@ -160,14 +154,14 @@ type Printer(tyenv : tyenv, limit : int) =
                     textNode name
                 else
                     let name, info = tyenv.exn_constructors.[tag]
-                    let section = Section.Create(Flow, 0)
-                    section.Add(textNode name)
+                    let accu = List()
+                    accu.Add(textNode name)
                     let fields =
                         match info.ci_args with
                         | [ ty_arg ] -> value_loop (path.Add(value)) 1 ty_arg fields.[0]
                         | args -> list_loop (path.Add(value)) "(" ")" (Seq.zip args fields)
-                    section.Add(fields)
-                    let node = Section section
+                    accu.Add(fields)
+                    let node = createSection Flow 0 (accu.ToArray())
                     if level > 0 then parenthesize node else node
         | Tconstr(id, tyl), _ ->
             match tyenv.types_of_id.TryFind id with
@@ -205,14 +199,14 @@ type Printer(tyenv : tyenv, limit : int) =
                             textNode name
                         else raise InvalidValue
                     else
-                        let section = Section.Create(Flow, 0)
-                        section.Add(textNode name)
+                        let accu = List()
+                        accu.Add(textNode name)
                         let fields =
                             (match fieldTypes with
                             | [ ty' ] -> value_loop (path.Add(value)) 1 (subst sl ty') fields.[0]
                             | _ -> list_loop (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) fieldTypes) fields))
-                        section.Add(fields)
-                        let node = Section section
+                        accu.Add(fields)
+                        let node = createSection Flow 0 (accu.ToArray())
                         if level > 0 then parenthesize node else node
                 | Krecord l ->
                     try
@@ -221,25 +215,24 @@ type Printer(tyenv : tyenv, limit : int) =
                         let items =
                             Seq.zip l fields
                             |> Seq.map (fun ((name : string, ty_gen, _ : access), value) ->
-                                let section = Section.Create(Flow, 0)
-                                section.Add(textNode (name + " ="))
-                                section.Add(value_loop path 0 (subst sl ty_gen) value)
-                                Section section)
+                                let accu = List()
+                                accu.Add(textNode (name + " ="))
+                                accu.Add(value_loop path 0 (subst sl ty_gen) value)
+                                createSection Flow 0 (accu.ToArray()))
                         seq_loop "{" "}" items
-                    with _ -> textNode textInvalid 
+                    with _ -> textNode textInvalid
         | _ -> raise InvalidValue
 
     and list_loop (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
         seq_loop lp rp (Seq.map (fun (ty, v) -> value_loop path 0 ty v) items)
 
     and seq_loop (lp : string) (rp : string) (items : Node seq) : Node =
-        let section = Section.Create(Flow, lp.Length)
-
+        let accu = List()
         let mutable first = true
 
         let comma() =
             if not first then
-                section.Weld ","
+                weld accu.[accu.Count - 1] ","
             first <- false
 
         let enum = items.GetEnumerator()
@@ -247,25 +240,30 @@ type Printer(tyenv : tyenv, limit : int) =
             (match enum.MoveNext(), char_counter < limit with
                 | true, true ->
                     comma()
-                    section.Add(enum.Current)
+                    accu.Add(enum.Current)
                     true
                 | true, false ->
                     comma()
-                    section.Add(textNode "...")
+                    accu.Add(textNode "...")
                     false
                 | false, _ -> false) do ()
-    
-        section.PreWeld(lp)
-        section.Weld rp
-        Section section
+        
+        if accu.Count = 0 then
+            textNode (lp + rp)
+        else
+            let node = createSection Flow lp.Length (accu.ToArray())
+            preWeld lp node
+            weld node rp
+            node
 
     member this.ValueLoop ty value = value_loop (ImmutableHashSet.Create<MalValue>(Misc.PhysicalEqualityComparer)) 0 ty value
+
+let textNode (s : string) = Text (StringBuilder(s))
 
 let node_of_value (tyenv : tyenv) ty value =
     try
         Printer(tyenv, 1000).ValueLoop ty value
-    with InvalidValue ->
-        Text (StringBuilder(textInvalid))
+    with InvalidValue -> textNode textInvalid
 
 let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
     
@@ -276,65 +274,60 @@ let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
                 if tv.level <> generic_level && is_scheme
                 then "'_"
                 else "'"
-            Text (StringBuilder(prefix + name_of_var tv))
+            textNode (prefix + name_of_var tv)
         | Tarrow _ ->
             let rec flatten ty =
                 match repr ty with
                 | Tarrow (name, ty1, ty2) -> (name, ty1) :: flatten ty2
                 | _ -> [("", ty)]
             let tyl = Array.ofList (flatten ty)
-            let sxn = Section.Create(Flow, 0)
+            let accu = List()
             for i = 0 to tyl.Length - 2 do
-                let ty_sxn = Section.Create(Flow, 0)
+                let ty_accu = List()
                 let name_i, ty_i = tyl.[i]
-                ty_sxn.Add(loop top 1 ty_i)
-                if name_i <> "" && top then ty_sxn.PreWeld(name_i + ":")
-                ty_sxn.Weld(" ->")
-                sxn.Add(Section ty_sxn)
+                let termNode = loop top 1 ty_i
+                if name_i <> "" && top then
+                    preWeld (name_i + ":") termNode
+                weld termNode " ->"
+                ty_accu.Add(termNode)
+                accu.Add(createSection Flow 0 (ty_accu.ToArray()))
             let _, ty_final = tyl.[tyl.Length - 1]
-            sxn.Add(loop top 0 ty_final)
-            let node = Section sxn
+            accu.Add(loop top 0 ty_final)
+            let node = createSection Flow 0 (accu.ToArray())
             if prio > 0 then
                 parenthesize node
             else node
-        | Ttuple [] -> Text (StringBuilder "unit")
+        | Ttuple [] -> textNode "unit"
         | Ttuple l ->
-            let accu = Section.Create(Flow, 0)
+            let accu = List<Node>()
             let star() =
-                accu.Weld(" *")
-            print_list (fun ty -> accu.Items.Add(loop false 2 ty)) star l
-            let elem = Section accu
+                weld accu.[accu.Count - 1] " *"
+            print_list (fun ty -> accu.Add(loop false 2 ty)) star l
+            let node = createSection Flow 0 (accu.ToArray())
             if prio > 1 then
-                parenthesize elem
-            else elem
-        | Tconstr(type_id.EXN, []) -> Text (StringBuilder "exn")
+                parenthesize node
+            else node
+        | Tconstr(type_id.EXN, []) -> textNode "exn"
         | Tconstr(id, []) ->
             match tyenv.types_of_id.TryFind id with
-            | Some ty -> Text (StringBuilder ty.ti_name)
+            | Some ty -> textNode ty.ti_name
             | None -> dontcare()
         | Tconstr(id, ([ ty ])) ->
             match tyenv.types_of_id.TryFind id with
             | Some ti ->
-                let s = Section.Create(Flow, 0) 
-                s.Add(loop false 2 ty)
-                s.Add(Text (StringBuilder ti.ti_name))
-                Section s
+                let accu = List()
+                accu.Add(loop false 2 ty)
+                accu.Add(textNode ti.ti_name)
+                createSection Flow 0 (accu.ToArray())
             | None -> dontcare()
         | Tconstr(id, l) ->
             match tyenv.types_of_id.TryFind id with
             | Some ti ->
-                let section1 = Section.Create(Flow, 0)
-                let comma() = 
-                    section1.Weld(",")
-                print_list (fun ty -> section1.Items.Add(loop false 0 ty)) comma l
-                
-                let section2 = parenthesize (Section section1)
-
-                let section3 = Section.Create(Flow, 0)
-                section3.Add(section2)
-                section3.Add(ti.ti_name)
-
-                Section section3
+                let accu = List()
+                let comma() =
+                    weld accu.[accu.Count - 1] ","
+                print_list (fun ty -> accu.Add(loop false 0 ty)) comma l                
+                createSection Flow 0 [| parenthesize (createSection Flow 0 (accu.ToArray())); textNode ti.ti_name |]
             | None -> dontcare()
     loop true prio ty
 
@@ -373,7 +366,7 @@ let update_sizes (elem : Node) =
                 loop sub
                 sect.Size <- sect.Size + sub.Size
         
-        sect.Size <- sect.Size + sect.Items.Count - 1
+        sect.Size <- sect.Size + sect.Items.Length - 1
     
     match elem with
     | Section s -> loop s
@@ -401,7 +394,7 @@ let string_of_node cols node =
         | Section box ->
             let vertical = box.Kind = Vertical && cols - col < box.Size
             let indent = indent + box.Indent
-            for i = 0 to box.Items.Count - 1 do
+            for i = 0 to box.Items.Length - 1 do
                 if i <> 0 then
                     if vertical || cols - col < (1 + match box.Items.[i] with Text sb -> sb.Length | Section s -> s.Size)
                     then
@@ -426,16 +419,20 @@ let print_value_without_type_colored define cols ty value =
 let print_value_without_type define cols ty value = fst (print_value_without_type_colored define cols ty value)
 
 let print_value_colored define cols ty value =
-    let s1 = Section.Create(Flow, 0)
-    s1.Add("- :")
-    s1.Add(node_of_scheme define ty)
-    s1.Weld(" =")
-    let s2 = Section.Create(Flow, 1)
-    s2.Add(Section s1)
-    s2.Add(node_of_value define ty value)
-    let node = Section s2
-    update_sizes node
-    string_of_node cols node
+    let accu1 = List()
+    accu1.Add(textNode "- :")
+    let ty_node = node_of_scheme define ty
+    weld ty_node " ="
+    accu1.Add(ty_node)
+    let node1 = createSection Flow 0 (accu1.ToArray())
+
+    let accu2 = List()
+    accu2.Add(node1)
+    accu2.Add(node_of_value define ty value)
+    let node2 = createSection Flow 1 (accu2.ToArray())
+
+    update_sizes node2
+    string_of_node cols node2
 
 let print_value define cols ty value = fst (print_value_colored define cols ty value)
 
@@ -445,21 +442,24 @@ let print_type tyenv cols ty =
     string_of_node cols node
 
 let print_definition (define : tyenv) cols name (info : value_info) (value : MalValue) =
-    let sxn1 = Section.Create(Flow, 0)
+    let accu1 = List()
     let valvar = match info.vi_access with Immutable -> "val" | Mutable -> "var"
-    sxn1.Add(sprintf "%s %s :" valvar name)
-    sxn1.Add(node_of_scheme define info.vi_type)
-    sxn1.Weld(" =")
-    let sxn2 = Section.Create(Flow, 1)
-    sxn2.Add(Section sxn1)
+    accu1.Add(textNode (sprintf "%s %s :" valvar name))
+    let ty_node = node_of_scheme define info.vi_type
+    weld ty_node " ="
+    accu1.Add(ty_node)
+    let node1 = createSection Flow 0 (accu1.ToArray())
+
+    let accu2 = List()
+    accu2.Add(node1)
     let value =
         match info.vi_access with
         | Immutable -> value
         | Mutable -> (value :?> Value.MalVar).Content
-    sxn2.Add(node_of_value define info.vi_type value)
-    let node = Section sxn2
-    update_sizes node
-    fst (string_of_node cols node)
+    accu2.Add(node_of_value define info.vi_type value)
+    let node2 = createSection Flow 1 (accu2.ToArray())
+    update_sizes node2
+    fst (string_of_node cols node2)
 
 type lang =
     | En
@@ -507,13 +507,13 @@ let print_typechk_error lang cols desc =
         match desc with
         | Type_mismatch (tyenv, kind, ty1, ty2) ->
             let name_of_var = create_tvar_assoc_table()
-            let s = Section.Create(Vertical, 0)
-            s.Add(sprintf "%s has type" (string_of_kind lang kind true))
-            s.Add(node_of_type tyenv name_of_var ty1)
-            s.Add "where"
-            s.Add(node_of_type tyenv name_of_var ty2)
-            s.Add "was expected."
-            let node = Section s
+            let accu = List()
+            accu.Add(textNode (sprintf "%s has type" (string_of_kind lang kind true)))
+            accu.Add(node_of_type tyenv name_of_var ty1)
+            accu.Add(textNode "where")
+            accu.Add(node_of_type tyenv name_of_var ty2)
+            accu.Add(textNode "was expected.")
+            let node = createSection Vertical 0 (accu.ToArray())
             update_sizes node
             fst (string_of_node cols node)
         | Multiple_occurence (kind, name, defkind) -> sprintf "%s %s occurs multiply in %s." (string_of_kind lang kind true) name (string_of_kind lang defkind false)
@@ -555,13 +555,13 @@ let print_typechk_error lang cols desc =
         match desc with
         | Type_mismatch (tyenv, kind, ty1, ty2) ->
             let name_of_var = create_tvar_assoc_table()
-            let s = Section.Create(Vertical, 0)
-            s.Add (sprintf "この%sは" (string_of_kind lang kind true))
-            s.Add(node_of_type tyenv name_of_var ty1)
-            s.Add "型ですが"
-            s.Add(node_of_type tyenv name_of_var ty2)
-            s.Add "型である必要があります。"
-            let node = Section s
+            let accu = List()
+            accu.Add(textNode (sprintf "この%sは" (string_of_kind lang kind true)))
+            accu.Add(node_of_type tyenv name_of_var ty1)
+            accu.Add(textNode "型ですが")
+            accu.Add(node_of_type tyenv name_of_var ty2)
+            accu.Add(textNode "型である必要があります。")
+            let node = createSection Vertical 0 (accu.ToArray())
             update_sizes node
             fst (string_of_node cols node)
         | Multiple_occurence (kind, name, defkind) -> sprintf "%s %s が%s中で複数回使われています。" (string_of_kind lang kind true) name (string_of_kind lang defkind false)
