@@ -46,8 +46,6 @@ and SectionKind =
     | Flow
     | Vertical
 
-exception InvalidValue
-
 let createSection kind indent (nodes : Node array) =
     Section
         { Kind = kind
@@ -73,16 +71,17 @@ let parenthesize (node : Node) =
     weld node ")"
     node
 
-let textInvalid = "<invalid>"
-
 type Printer(tyenv : tyenv, limit : int) =
     let mutable char_counter = 0
 
     let textNode (s : string) =
         char_counter <- char_counter + s.Length
         Text (StringBuilder(s))
+    
+    let invalidNode() = textNode "<invalid>"
+    let abstrNode() = textNode "<abstr>"
 
-    let createListSection (lp : string) (rp : string) (accu : List<Node>) =
+    let listNode (lp : string) (rp : string) (accu : List<Node>) =
 
         for i = 0 to accu.Count - 2 do
             weld accu.[i] ","
@@ -110,7 +109,7 @@ type Printer(tyenv : tyenv, limit : int) =
             let i = toInt value
             if int Char.MinValue <= i && i <= int Char.MaxValue then
                 textNode ("'" + escaped_char (char i) + "'")
-            else raise InvalidValue
+            else invalidNode()
         | Tconstr(type_id.FLOAT, []), MalValueKind.FLOAT ->
             let x = toFloat value
             let s = string_of_float x
@@ -159,34 +158,21 @@ type Printer(tyenv : tyenv, limit : int) =
                         accu.Add(textNode "...")
                         cont <- false
                 else cont <- false
-            createListSection "[" "]" accu
+            listNode "[" "]" accu
         | Tconstr(type_id.EXN, _), _ ->
-            let tag = getTag value
-            let fields = getFields value
-            let name, info = tyenv.exn_constructors.[tag]
-            if fields.Length <> info.ci_args.Length then textNode textInvalid
-            else
-                if fields.Length = 0 then
-                    textNode name
-                else
-                    let name, info = tyenv.exn_constructors.[tag]
-                    let accu = List()
-                    accu.Add(textNode name)
-                    let fields =
-                        match info.ci_args with
-                        | [ ty_arg ] -> value_loop (path.Add(value)) 1 ty_arg fields.[0]
-                        | args -> list_loop (path.Add(value)) "(" ")" (Seq.zip args fields)
-                    accu.Add(fields)
-                    let node = createSection Flow 0 (accu.ToArray())
-                    if level > 0 then parenthesize node else node
+            try
+                let tag = getTag value
+                let name, info = tyenv.exn_constructors.[tag]
+                let fields = getFields value
+                variantNode (path.Add(value)) level name (info.ci_args) fields
+            with _ -> invalidNode()
         | Tconstr(id, tyl), _ ->
             match tyenv.types_of_id.TryFind id with
-            | None -> textNode textInvalid
+            | None -> invalidNode()
             | Some info ->
                 let sl = List.zip info.ti_params tyl
                 match info.ti_kind with
                 | Kbasic ->
-                    let abstr() = textNode "<abstr>"
                     if value.Kind = MalValueKind.OBJ then
                         if (value :?> MalObj).Obj.GetType() = typeof<System.Text.RegularExpressions.Match> then
                             let m = (value :?> MalObj).Obj :?> System.Text.RegularExpressions.Match
@@ -197,33 +183,17 @@ type Printer(tyenv : tyenv, limit : int) =
                                 else
                                     textNode (sprintf "<match Success=%b Index=%d Len=%d Value=\"%s\"...>" m.Success m.Index m.Length (m.Value.Substring(0, maxPreviewLength)))
                             else textNode "<match Success=false>"
-                        else abstr()
-                    else abstr()
+                        else abstrNode()
+                    else abstrNode()
                 | Kabbrev ty -> value_loop path level (subst sl ty) value
                 | Kvariant casel ->
-                    let name, _, fieldTypes =
-                        try
-                            let tag = Value.getTag value
-                            List.find (fun (_, tag', _) -> tag = tag') casel
-                        with _ -> raise InvalidValue
-                    let fields =
-                        try Value.getFields value
-                        with _ -> raise InvalidValue
-
-                    if fieldTypes.Length = 0 then
-                        if fields.Length = 0 then
-                            textNode name
-                        else raise InvalidValue
-                    else
-                        let accu = List()
-                        accu.Add(textNode name)
-                        let fields =
-                            (match fieldTypes with
-                            | [ ty' ] -> value_loop (path.Add(value)) 1 (subst sl ty') fields.[0]
-                            | _ -> list_loop (path.Add(value)) "(" ")" (Seq.zip (Seq.map (subst sl) fieldTypes) fields))
-                        accu.Add(fields)
-                        let node = createSection Flow 0 (accu.ToArray())
-                        if level > 0 then parenthesize node else node
+                    try
+                        let tag = Value.getTag value
+                        let name, _, fieldGenTypes = List.find (fun (_, tag', _) -> tag = tag') casel
+                        let fieldTypes = List.map (fun ty -> subst sl ty) fieldGenTypes
+                        let fields = Value.getFields value
+                        variantNode (path.Add(value)) level name fieldTypes fields
+                    with _ -> invalidNode()
                 | Krecord l ->
                     try
                         let fields = Value.getFields value
@@ -233,9 +203,9 @@ type Printer(tyenv : tyenv, limit : int) =
                             let labelNode = textNode (label + " =")
                             let valueNode = value_loop path 0 (subst sl ty_gen) fields.[i]
                             accu.Add(createSection Flow 1 [|labelNode; valueNode|])) l
-                        createListSection "{" "}" accu
-                    with _ -> textNode textInvalid
-        | _ -> raise InvalidValue
+                        listNode "{" "}" accu
+                    with _ -> invalidNode()
+        | _ -> invalidNode()
 
     and list_loop (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
 
@@ -253,16 +223,28 @@ type Printer(tyenv : tyenv, limit : int) =
                     false
                 | false, _ -> false) do ()
 
-        createListSection lp rp accu
-
+        listNode lp rp accu
+    
+    and variantNode (path : ImmutableHashSet<MalValue>)(level : int) (name : string) (fieldTypes : type_expr list) (fields : MalValue array) =
+        try
+            if fieldTypes.Length <> fields.Length then failwith "invalid value"
+            if fieldTypes.Length = 0 then
+                textNode name
+            else
+                let labelNode = textNode name
+                let fieldsNode =
+                    (match fieldTypes with
+                    | [ ty' ] -> value_loop path 1 (fieldTypes.[0]) fields.[0]
+                    | _ -> list_loop path "(" ")" (Seq.zip fieldTypes fields))
+                let node = createSection Flow 0 [| labelNode; fieldsNode |]
+                if level > 0 then parenthesize node else node
+        with _ -> invalidNode()
+    
     member this.ValueLoop ty value = value_loop (ImmutableHashSet.Create<MalValue>(Misc.PhysicalEqualityComparer)) 0 ty value
 
 let textNode (s : string) = Text (StringBuilder(s))
 
-let node_of_value (tyenv : tyenv) ty value =
-    try
-        Printer(tyenv, 1000).ValueLoop ty value
-    with InvalidValue -> textNode textInvalid
+let node_of_value (tyenv : tyenv) ty value = Printer(tyenv, 1000).ValueLoop ty value
 
 let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
     
