@@ -255,7 +255,7 @@ let textNode (s : string) = Text (StringBuilder(s))
 
 let node_of_value (tyenv : tyenv) ty value = ValuePrinter(tyenv, 1000).ValueLoop ty value
 
-let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
+let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme ty =
     
     let rec loop top prio ty =
         match repr ty with
@@ -319,7 +319,7 @@ let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
                 print_list (fun ty -> accu.Add(loop false 0 ty)) comma l                
                 createSection Flow 0 [| parenthesize (createSection Flow 0 (accu.ToArray())); textNode ti.ti_name |]
             | None -> dontcare()
-    loop true prio ty
+    loop true 0 ty
 
 let create_tvar_assoc_table () = 
     let dict = Dictionary<type_var, string>(Misc.PhysicalEqualityComparer)
@@ -338,10 +338,10 @@ let create_tvar_assoc_table () =
 
 let node_of_scheme (tyenv : tyenv) ty =
     let name_of_var = create_tvar_assoc_table()
-    node_of_type_expr tyenv name_of_var true 0 ty
+    node_of_type_expr tyenv name_of_var true ty
 
 let node_of_type (tyenv : tyenv) name_of_var ty =
-    node_of_type_expr tyenv name_of_var false 0 ty
+    node_of_type_expr tyenv name_of_var false ty
 
 let update_sizes (elem : Node) =
 
