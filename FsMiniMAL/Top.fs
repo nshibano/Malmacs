@@ -275,14 +275,14 @@ let tyenv_std, alloc_std, genv_std =
         (fun mm argv ->
             match Double.TryParse(toString argv.[0]) with
             | true, x -> ofFloat x
-            | false, _ -> mal_failwith mm "float_of_string: Invalid argument")
+            | false, _ -> mal_failwith mm "floatOfString: Invalid argument")
 
     add_func "charOfInt" (arrow ty_int ty_char) 1
         (fun mm argv ->
             let i = toInt argv.[0]
             if int Char.MinValue <= i && i <= int Char.MaxValue
             then argv.[0]
-            else mal_failwith mm "char_of_int: given int is out of range")
+            else mal_failwith mm "charOfInt: Out of range")
 
     add_func "intOfChar" (arrow ty_char ty_int) 1 (fun mm argv -> argv.[0])
     add_func "raise" (arrow ty_exn ty_a) 1 (fun mm argv -> raise (MalException argv.[0]))
