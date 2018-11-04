@@ -19,18 +19,20 @@ let print_list p sep =
         p hd
         List.iter (fun a -> sep(); p a) tl
 
-let escaped_char c =
-    match c with
-    | '\n' -> "\\n"
-    | '\t' -> "\\t"
-    | '\b' -> "\\b"
-    | '\r' -> "\\r"
-    | '\\' -> "\\\\"
-    | '"'  -> "\\\""
-    | _ ->
-        if Char.IsControl c
-        then sprintf "\\%03d" (int c)
-        else String(c, 1)
+let escapedChar c =
+    if c = '"' then
+        "\\\""
+    elif c = '\\' then
+        "\\\\"
+    elif '\x20' <= c then
+        String(c, 1)
+    else
+        match c with
+        | '\b' -> "\\b"
+        | '\t' -> "\\t"
+        | '\n' -> "\\n"
+        | '\r' -> "\\r"
+        | _ -> sprintf "\\%03d" (int c)
     
 type Node = 
     | Text of StringBuilder
@@ -72,6 +74,8 @@ let parenthesize (node : Node) =
     node
 
 type ValuePrinter(tyenv : tyenv, limit : int) =
+    let stringLimit = 1000
+
     let mutable charCounter = 0
 
     let textNode (s : string) =
@@ -96,8 +100,11 @@ type ValuePrinter(tyenv : tyenv, limit : int) =
 
     let rec value_loop (path : ImmutableHashSet<MalValue>) (level : int) (ty : type_expr) (value : MalValue) : Node =
         match repr ty, value.Kind with
-        | Tarrow _, _ -> textNode "<fun>"
-        | Ttuple [], _ -> textNode "()"
+        | Tarrow _, (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE) -> textNode "<fun>"
+        | Ttuple [], MalValueKind.INT ->
+            if toInt value = 0 then
+                textNode "()"
+            else invalidNode()
         | Tconstr(type_id.INT, []), MalValueKind.INT ->
             let s = (toInt value).ToString()
             let s =
@@ -108,7 +115,8 @@ type ValuePrinter(tyenv : tyenv, limit : int) =
         | Tconstr(type_id.CHAR, []), MalValueKind.INT ->
             let i = toInt value
             if int Char.MinValue <= i && i <= int Char.MaxValue then
-                textNode ("'" + escaped_char (char i) + "'")
+                let s = escapedChar (char i)
+                textNode ("'" + s + "'")
             else invalidNode()
         | Tconstr(type_id.FLOAT, []), MalValueKind.FLOAT ->
             let x = toFloat value
@@ -120,23 +128,24 @@ type ValuePrinter(tyenv : tyenv, limit : int) =
             textNode s
         | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
             let s = toString value
-            let limit = 1000
-            if limit < s.Length then
-                let sb = StringBuilder()
-                for i = 0 to limit - 1 do
-                    sb.Add(escaped_char s.[i])
-                textNode (sprintf "<string len=%d \"%s\"...>" s.Length (sb.ToString()))
-            else
+            if s.Length < stringLimit then
                 let sb = StringBuilder()
                 sb.Add('"')
                 for i = 0 to s.Length - 1 do
-                    sb.Add(escaped_char s.[i])
+                    sb.Add(escapedChar s.[i])
                 sb.Add('"')
                 textNode (sb.ToString())
+            else
+                let sb = StringBuilder()
+                for i = 0 to stringLimit - 1 do
+                    sb.Add(escapedChar s.[i])
+                textNode (sprintf "<string len=%d \"%s\"...>" s.Length (sb.ToString()))
         | _ when path.Contains(value) ->
                 textNode "..."
         | Ttuple l, _ ->
-            list_loop (path.Add(value)) "(" ")" (Seq.zip l (getFields value))
+            try
+                list_loop (path.Add(value)) "(" ")" (Seq.zip l (getFields value))
+            with _ -> invalidNode()
         | Tconstr(type_id.ARRAY, [a]), MalValueKind.ARRAY ->
             let ary = value :?> MalArray
             let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }

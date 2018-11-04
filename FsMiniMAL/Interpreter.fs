@@ -926,7 +926,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                 let mutable pos = bgn
                 sb.Add("\"")
                 while pos < ed && pos < bgn + 50 do
-                    sb.Add(Printer.escaped_char loc.src.[pos])
+                    sb.Add(Printer.escapedChar loc.src.[pos])
                     pos <- pos + 1
                 sb.Add("\"")
                 if pos <> ed then
