@@ -128,7 +128,7 @@ type ValuePrinter(tyenv : tyenv, limit : int) =
             textNode s
         | Tconstr (type_id.STRING, []), MalValueKind.STRING ->
             let s = toString value
-            if s.Length < stringLimit then
+            if s.Length <= stringLimit then
                 let sb = StringBuilder()
                 sb.Add('"')
                 for i = 0 to s.Length - 1 do
