@@ -71,11 +71,11 @@ let parenthesize (node : Node) =
     weld node ")"
     node
 
-type Printer(tyenv : tyenv, limit : int) =
-    let mutable char_counter = 0
+type ValuePrinter(tyenv : tyenv, limit : int) =
+    let mutable charCounter = 0
 
     let textNode (s : string) =
-        char_counter <- char_counter + s.Length
+        charCounter <- charCounter + s.Length
         Text (StringBuilder(s))
     
     let invalidNode() = textNode "<invalid>"
@@ -148,7 +148,7 @@ type Printer(tyenv : tyenv, limit : int) =
             let mutable cont = true
             while cont do
                 if value.Kind = MalValueKind.BLOCK && getTag value = 1 && (getFields value).Length = 2 then
-                    if char_counter < limit then
+                    if charCounter < limit then
                         let fields = getFields value
                         let hd, tl = fields.[0], fields.[1]
                         path <- path.Add(value)
@@ -213,7 +213,7 @@ type Printer(tyenv : tyenv, limit : int) =
 
         let enum = items.GetEnumerator()
         while
-            (match enum.MoveNext(), char_counter < limit with
+            (match enum.MoveNext(), charCounter < limit with
                 | true, true ->
                     let ty, v = enum.Current
                     accu.Add(value_loop path 0 ty v)
@@ -225,7 +225,7 @@ type Printer(tyenv : tyenv, limit : int) =
 
         listNode lp rp accu
     
-    and variantNode (path : ImmutableHashSet<MalValue>)(level : int) (name : string) (fieldTypes : type_expr list) (fields : MalValue array) =
+    and variantNode (path : ImmutableHashSet<MalValue>) (level : int) (name : string) (fieldTypes : type_expr list) (fields : MalValue array) =
         try
             if fieldTypes.Length <> fields.Length then failwith "invalid value"
             if fieldTypes.Length = 0 then
@@ -244,7 +244,7 @@ type Printer(tyenv : tyenv, limit : int) =
 
 let textNode (s : string) = Text (StringBuilder(s))
 
-let node_of_value (tyenv : tyenv) ty value = Printer(tyenv, 1000).ValueLoop ty value
+let node_of_value (tyenv : tyenv) ty value = ValuePrinter(tyenv, 1000).ValueLoop ty value
 
 let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme prio ty =
     
