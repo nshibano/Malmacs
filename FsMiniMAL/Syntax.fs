@@ -108,7 +108,7 @@ and expression_desc =
     | SEgetfield of expression * string
     | SEsetfield of expression * string * expression
     // after typecheck only
-    | SEurecord of (int * access * expression) list * expression option
+    | SEurecord of expression option * (int * access * expression) list
     | SEconstr of int * expression list
     | SEformat of PrintfFormat.PrintfCommand list
 
@@ -196,6 +196,6 @@ let expressionDo (f : expression -> unit) (e : expression) =
     | SErecord (e, l) -> Option.iter f e; List.iter (fun (_, e) -> f e) l
     | SEgetfield (e, _) -> f e
     | SEsetfield (e1, _, e2) -> f e1; f e2
-    | SEurecord (fields, orig) -> Option.iter f orig; List.iter (fun (_, _, e) -> f e) fields
+    | SEurecord (orig, fields) -> Option.iter f orig; List.iter (fun (_, _, e) -> f e) fields
     | SEconstr (_, l) -> List.iter f l
     | SEformat _ -> ()

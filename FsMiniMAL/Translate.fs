@@ -107,13 +107,13 @@ and expression (alloc : alloc) (tailcall_info : (string * int) option) (se : Syn
                 | hd :: tl -> UEblock (1, [| expression alloc None hd; loop tl |])
             loop l
         | SEstring s -> UEconst (ofString dummy_mm s)
-        | SEurecord (l, None) ->
+        | SEurecord (None, l) ->
             let ary = Array.zeroCreate (List.length l)
             for (index, _, e) in l do
                 let ue = expression alloc None e
                 ary.[index] <- ue
             UEblock(0, ary)
-        | SEurecord (l, Some orig) ->
+        | SEurecord (Some orig, l) ->
             let u_orig = expression alloc None orig
             let indexes = Array.ofList (List.map (fun (i, _, _) -> i) l)
             let uexprs = Array.ofList (List.map (fun (_, _, e) -> expression alloc None e) l)

@@ -495,7 +495,7 @@ let rec is_nonexpansive (e : Syntax.expression) =
     | SElist (LKarray, _) | SEapply _ | SEset _ -> false
     | SEconstr (_, l) -> List.forall is_nonexpansive l
     | SEtuple l | SElist (LKlist, l) -> List.forall is_nonexpansive l
-    | SEurecord (fields, orig) ->
+    | SEurecord (orig, fields) ->
         (match orig with None -> true | Some e -> is_nonexpansive e) &&
         List.forall (fun (_, access, e) -> access = Immutable && is_nonexpansive e) fields
     | SEbegin l -> List.forall cmd_nonexpansive l
@@ -660,7 +660,7 @@ let rec expression (warning_sink : warning_sink) (tyenv : tyenv) (type_vars : Di
         // typecheck for field expressions
         List.iter (fun (_, _, ty_field, _, e) -> expression_expect warning_sink tyenv type_vars current_level ty_field e) fields
 
-        e.se_desc <- SEurecord ((List.map (fun (_, idx, _, access, e) -> (idx, access, e)) fields), orig)
+        e.se_desc <- SEurecord (orig, (List.map (fun (_, idx, _, access, e) -> (idx, access, e)) fields))
         ty_res
     | SEapply (func, args) ->
         let apply_default() =
