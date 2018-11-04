@@ -143,20 +143,23 @@ type Printer(tyenv : tyenv, limit : int) =
             let items = seq { for i = 0 to ary.Count - 1 do yield (a, ary.Storage.[i]) }
             list_loop (path.Add(value)) "[|" "|]" items
         | Tconstr(type_id.LIST, [a]), _ ->
-            let items = 
-                seq {
-                    let mutable x = value
-                    let mutable path = path
-                    while (try Value.getTag x = 1 with _ -> raise InvalidValue) do
-                        path <- path.Add(x)
-                        let hd, tl =
-                            try
-                                let fields = Value.getFields x
-                                fields.[0], fields.[1]
-                            with _ -> raise InvalidValue
-                        yield value_loop path 0 a hd
-                        x <- tl }
-            seq_loop "[" "]" items
+            let accu = List()
+            let mutable path = path
+            let mutable value = value
+            let mutable cont = true
+            while cont do
+                if value.Kind = MalValueKind.BLOCK && getTag value = 1 && (getFields value).Length = 2 then
+                    if char_counter < limit then
+                        let fields = getFields value
+                        let hd, tl = fields.[0], fields.[1]
+                        path <- path.Add(value)
+                        accu.Add(value_loop path 0 a hd)
+                        value <- tl
+                    else
+                        accu.Add(textNode "...")
+                        cont <- false
+                else cont <- false
+            createListSection "[" "]" accu
         | Tconstr(type_id.EXN, _), _ ->
             let tag = getTag value
             let fields = getFields value
@@ -225,14 +228,12 @@ type Printer(tyenv : tyenv, limit : int) =
                     try
                         let fields = Value.getFields value
                         let path = path.Add(value)
-                        let items =
-                            Seq.zip l fields
-                            |> Seq.map (fun ((name : string, ty_gen, _ : access), value) ->
-                                let accu = List()
-                                accu.Add(textNode (name + " ="))
-                                accu.Add(value_loop path 0 (subst sl ty_gen) value)
-                                createSection Flow 0 (accu.ToArray()))
-                        seq_loop "{" "}" items
+                        let accu = List()
+                        List.iteri (fun i (label, ty_gen, _) ->
+                            let labelNode = textNode (label + " =")
+                            let valueNode = value_loop path 0 (subst sl ty_gen) fields.[i]
+                            accu.Add(createSection Flow 1 [|labelNode; valueNode|])) l
+                        createListSection "{" "}" accu
                     with _ -> textNode textInvalid
         | _ -> raise InvalidValue
 
