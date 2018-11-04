@@ -82,6 +82,19 @@ type Printer(tyenv : tyenv, limit : int) =
         char_counter <- char_counter + s.Length
         Text (StringBuilder(s))
 
+    let createListSection (lp : string) (rp : string) (accu : List<Node>) =
+
+        for i = 0 to accu.Count - 2 do
+            weld accu.[i] ","
+        
+        if accu.Count = 0 then
+            textNode (lp + rp)
+        else
+            let node = createSection Flow lp.Length (accu.ToArray())
+            preWeld lp node
+            weld node rp
+            node
+
     let rec value_loop (path : ImmutableHashSet<MalValue>) (level : int) (ty : type_expr) (value : MalValue) : Node =
         match repr ty, value.Kind with
         | Tarrow _, _ -> textNode "<fun>"
@@ -225,34 +238,22 @@ type Printer(tyenv : tyenv, limit : int) =
 
     and list_loop (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
         seq_loop lp rp (Seq.map (fun (ty, v) -> value_loop path 0 ty v) items)
-
+    
     and seq_loop (lp : string) (rp : string) (items : Node seq) : Node =
         let accu = List()
-
-        let comma() =
-            if accu.Count > 0 then
-                weld accu.[accu.Count - 1] ","
 
         let enum = items.GetEnumerator()
         while
             (match enum.MoveNext(), char_counter < limit with
                 | true, true ->
-                    comma()
                     accu.Add(enum.Current)
                     true
                 | true, false ->
-                    comma()
                     accu.Add(textNode "...")
                     false
                 | false, _ -> false) do ()
-        
-        if accu.Count = 0 then
-            textNode (lp + rp)
-        else
-            let node = createSection Flow lp.Length (accu.ToArray())
-            preWeld lp node
-            weld node rp
-            node
+
+        createListSection lp rp accu
 
     member this.ValueLoop ty value = value_loop (ImmutableHashSet.Create<MalValue>(Misc.PhysicalEqualityComparer)) 0 ty value
 
