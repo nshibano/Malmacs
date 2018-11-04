@@ -238,16 +238,15 @@ type Printer(tyenv : tyenv, limit : int) =
         | _ -> raise InvalidValue
 
     and list_loop (path : ImmutableHashSet<MalValue>) lp rp (items : (type_expr * MalValue) seq) : Node =
-        seq_loop lp rp (Seq.map (fun (ty, v) -> value_loop path 0 ty v) items)
-    
-    and seq_loop (lp : string) (rp : string) (items : Node seq) : Node =
+
         let accu = List()
 
         let enum = items.GetEnumerator()
         while
             (match enum.MoveNext(), char_counter < limit with
                 | true, true ->
-                    accu.Add(enum.Current)
+                    let ty, v = enum.Current
+                    accu.Add(value_loop path 0 ty v)
                     true
                 | true, false ->
                     accu.Add(textNode "...")
