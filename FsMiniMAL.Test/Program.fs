@@ -410,6 +410,8 @@ accu"
 
     topcase "type xyz = { x : int, y : float, z : int }; val foo = { x = 1, y = 2.0, z = 3 }; { foo with z = 5 }" "{x = 1, y = 2.0, z = 5}"
 
+    topcase "type 'a foo == int; [(0 : string foo), (1 : float foo)]; ()" "()" // The types of two values are looks different, but same after expanding abbreviation.
+
     printfn "Done."
     //printfn "Elapsed: %d (ms)" sw.ElapsedMilliseconds
     printfn "Press any key to close."

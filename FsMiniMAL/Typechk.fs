@@ -126,15 +126,17 @@ let option_repr (ty : type_expr option) =
     | Some ty -> Some (repr ty)
 
 let rec is_record (tyenv : tyenv) (some_ty : type_expr option) =
-    match option_repr some_ty with
-    | Some (Tconstr (id, _) as ty) ->
-        match tyenv.types_of_id.TryFind(id) with
-        | Some ti ->
-            match ti.ti_kind with
-            | Krecord _ -> Some id
-            | Kabbrev _ -> is_record tyenv (expand tyenv ty)
-            | _ -> None
-        | _ -> dontcare()
+    match some_ty with
+    | Some ty ->
+        match expanded tyenv ty with
+        | Tconstr (id, _) as ty ->
+            match tyenv.types_of_id.TryFind(id) with
+            | Some ti ->
+                match ti.ti_kind with
+                | Krecord _ -> Some id
+                | _ -> None
+            | _ -> dontcare()
+        | _ -> None
     | _ -> None
 
 /// Creates Types.type_expr from Syntax.type_expr.
