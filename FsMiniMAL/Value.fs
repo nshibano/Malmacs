@@ -8,13 +8,13 @@ open FSharp.Reflection
 
 open Types
 
-let sizeof_int, sizeof_float, block_overhead, array_overhead, value_array_increment, string_overhead, string_increment =
+let block_overhead, array_overhead, value_array_increment, string_overhead, string_increment =
     if IntPtr.Size = 8
-    then 32, 40, 64, 96, 8, 70, 2
-    else 20, 24, 36, 48, 4, 34, 2
+    then 64, 64, 40, 70, 2
+    else 36, 36, 24, 34, 2
 
 let sizeof_block len = block_overhead + value_array_increment * len
-let sizeof_array cap = array_overhead + value_array_increment * cap
+let sizeof_array len = array_overhead + value_array_increment * len
 let sizeof_string len = string_overhead + string_increment * len
 
 // The value type is defined as regular class (not discriminated unions) to
