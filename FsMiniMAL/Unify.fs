@@ -58,7 +58,7 @@ let rec same_type tyenv ty1 ty2 =
     | Tvar tv1, Tvar tv2 -> LanguagePrimitives.PhysicalEquality tv1 tv2
     | Tarrow (_, ty11, ty12), Tarrow (_, ty21, ty22) -> same_type tyenv ty11 ty21 && same_type tyenv ty12 ty22
     | Ttuple l1, Ttuple l2 -> l1.Length = l2.Length && List.forall2 (same_type tyenv) l1 l2
-    | Tconstr (id1, l1), Tconstr (id2, l2) when id1 = id2 -> l1.Length = l2.Length && List.forall2 (same_type tyenv) l1 l2
+    | Tconstr (id1, l1), Tconstr (id2, l2) when id1 = id2 -> List.forall2 (same_type tyenv) l1 l2
     | _ -> false
 
 /// Raises exception Unify when tvar appears in ty.
