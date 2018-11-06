@@ -345,7 +345,7 @@ and cmd_nonexpansive cmd =
     | SCexpr e -> is_nonexpansive e
     | SCval l -> List.forall (fun (_, e) -> is_nonexpansive e) l
     | SCfun _ -> true
-    | SCvar l -> List.forall (fun (_, e) -> is_nonexpansive e) l
+    | SCvar _ -> false
     | _ -> dontcare()
 
 let type_printf_cmds cmds ty_result = 
