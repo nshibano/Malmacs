@@ -103,6 +103,139 @@ let option_repr (ty : type_expr option) =
     | None -> None
     | Some ty -> Some (repr ty)
 
+/// Creates Types.type_expr from Syntax.type_expr.
+/// When unknown type var was found in Syntax.type_expr, throws error or assign new type var depending on is_typedef.
+let rec type_expr tyenv (level_for_new_tvar : int option) (type_vars : Dictionary<string, type_expr>) sty =
+    match sty.st_desc with
+    | STvar s ->
+        match type_vars.TryGetValue s with
+        | true, ty -> ty
+        | false, _ ->
+            match level_for_new_tvar with
+            | None -> raise (Type_error (Unbound_type_variable s, sty.st_loc))
+            | Some level ->
+                let ty = new_tvar level
+                type_vars.Add(s, ty)
+                ty
+    | STarrow (st1, st2) -> Tarrow ("", (type_expr tyenv level_for_new_tvar type_vars st1), (type_expr tyenv level_for_new_tvar type_vars st2))
+    | STtuple stl -> Ttuple (List.map (type_expr tyenv level_for_new_tvar type_vars) stl)
+    | STconstr (s, stl) ->
+        match tyenv.types.TryFind s with
+        | Some info ->
+            if List.length stl <> List.length info.ti_params then
+                raise (Type_error (Wrong_arity_for_type s, sty.st_loc))
+            subst (List.zip info.ti_params (List.map (type_expr tyenv level_for_new_tvar type_vars) stl)) info.ti_res
+        | None -> raise (Type_error (Undefined_type_constructor s, sty.st_loc))
+
+/// Define new type from Syntax.typedef
+let add_typedef tyenv loc dl =
+    
+    // Checks new type names are lowercase.
+    for d in dl do
+        if is_constructor d.sd_name then
+            raise (Type_error (Invalid_type_name, d.sd_loc))
+    
+    // Checks duplicate in new type names.
+    all_differ loc kind.Type_name kind.Type_definition (List.map (fun td -> td.sd_name) dl)
+
+    // Check variant case names or record label names.
+    for d in dl do
+        match d.sd_kind with
+        | SKrecord fields ->
+            for name, _, _ in fields do
+                if is_constructor name then
+                    raise (Type_error (Invalid_label_name, d.sd_loc))
+
+        | SKvariant cases ->
+            for name, _ in cases do
+                if not (Char.IsUpper name.[0]) then
+                    raise (Type_error (Invalid_constructor_name, d.sd_loc))
+
+        | _ -> ()
+                
+    // Checks duplicates in variant names.
+    for d in dl do
+        match d.sd_kind with
+        | SKvariant cl ->
+            let constructors = List.map fst cl
+            all_differ d.sd_loc Constructor Type_definition constructors
+        | _ -> ()
+    
+    // Checks duplicates in record labels.
+    for d in dl do
+        match d.sd_kind with
+        | SKrecord fl ->
+            let labels = List.map (fun (labels, _, _) -> labels) fl
+            all_differ d.sd_loc Label Type_definition labels
+        | _ -> ()
+        
+    // Checks duplicates in type var name.
+    List.iter (fun td -> all_differ td.sd_loc kind.Type_parameter kind.Type_definition td.sd_params) dl
+
+    // Checks there is no circular type abbreviation.
+    let abbrev_defs = List.choose (function { Syntax.sd_kind = SKabbrev ty } as sd -> Some (sd, sd.sd_name, ty) | _ -> None) dl
+    let abbrev_defs_map = Map.ofList (List.map (fun (_, name, ty) -> (name, ty)) abbrev_defs)
+    let check_cyclic_abbrev (d : typedef) =
+        let name, ty = match d.sd_kind with SKabbrev ty -> d.sd_name, ty | _ -> dontcare()
+        let mutable visited = Set.ofArray [| name |]
+        let rec visit (ty : Syntax.type_expr) =
+            match ty.st_desc with
+            | STvar _ -> ()
+            | STarrow (ty1, ty2) -> visit ty1; visit ty2
+            | STtuple l -> List.iter visit l
+            | STconstr (name, args) ->
+                if abbrev_defs_map.ContainsKey name then
+                    if visited.Contains name then
+                        raise (Type_error (Type_definition_contains_immediate_cyclic_type_abbreviation, loc))
+                    else
+                        visited <- Set.add name visited
+                        visit abbrev_defs_map.[name]
+                List.iter visit args
+        visit ty
+    List.iter (fun (def, _, _) -> check_cyclic_abbrev def) abbrev_defs
+
+    // Create tyenv with dummy definitions.
+    let dl, tyenv_with_dummy_defs = list_mapFold (fun tyenv td ->
+        let id = type_id_new ()
+        // Create type var instance for type parameters.
+        let params' = List.map (fun _ -> { link = None; level = 0 }) td.sd_params
+        // Set the dummy type to the global table.
+        let ti = make_ti id td.sd_name params' Kbasic
+        (td, id, ti), Types.add_type tyenv ti) tyenv dl
+
+    /// Evaluate the type expressions syntax tree in environment with dummy types. 
+    let dl =
+        List.map (fun (td, id, ti_dummy) ->
+            // Craete type information from syntax tree.
+            // When type constructor is used in syntax tree, arity matching is checked.
+            // For recursive type definitions, arity is checked using dummy type info.
+            let type_vars = Dictionary<string, type_expr>()
+            List.iter2 (fun name tv -> type_vars.Add(name, (Tvar tv))) td.sd_params ti_dummy.ti_params
+            let kind = 
+                match td.sd_kind with
+                | SKabbrev sty -> Kabbrev (type_expr tyenv_with_dummy_defs None type_vars sty)
+                | SKvariant cl -> Kvariant (List.mapi (fun i (s, stl) -> (s, i, (List.map (type_expr tyenv_with_dummy_defs None type_vars) stl))) cl)
+                | SKrecord fl -> Krecord (List.map (fun (s, sty, access) -> (s, (type_expr tyenv_with_dummy_defs None type_vars sty), access)) fl)
+            let ti = { ti_dummy with ti_kind = kind }
+            (td, id, ti_dummy, ti)) dl
+    
+    // Create tyenv with real type information.
+    List.fold (fun tyenv (_, _, _, ti) -> Types.add_type tyenv ti) tyenv dl
+
+let hide_type (tyenv : tyenv) name loc =
+        match tyenv.types.TryFind(name) with
+        | Some info ->
+            let id = match info.ti_res with Tconstr (id, _) -> id | _ -> dontcare()
+            if id <= id_option then
+                raise (Type_error (Basic_types_cannot_be_hidden, loc))
+            match info.ti_kind with
+            | Kbasic -> raise (Type_error (Already_abstract name, loc))
+            | _ ->
+                let tyenv = remove_type tyenv info
+                let info = { info with ti_kind = Kbasic }
+                add_type tyenv info
+        | None -> raise (Type_error (Undefined_type_constructor name, loc))
+
 type Typechecker() =
 
     /// Unifies ty with 'a -> 'b where 'a and 'b are new type variable at current_level. Then returns ('a, 'b).
@@ -140,139 +273,6 @@ type Typechecker() =
                 | _ -> dontcare()
             | _ -> None
         | _ -> None
-
-    /// Creates Types.type_expr from Syntax.type_expr.
-    /// When unknown type var was found in Syntax.type_expr, throws error or assign new type var depending on is_typedef.
-    let rec type_expr tyenv (level_for_new_tvar : int option) (type_vars : Dictionary<string, type_expr>) sty =
-        match sty.st_desc with
-        | STvar s ->
-            match type_vars.TryGetValue s with
-            | true, ty -> ty
-            | false, _ ->
-                match level_for_new_tvar with
-                | None -> raise (Type_error (Unbound_type_variable s, sty.st_loc))
-                | Some level ->
-                    let ty = new_tvar level
-                    type_vars.Add(s, ty)
-                    ty
-        | STarrow (st1, st2) -> Tarrow ("", (type_expr tyenv level_for_new_tvar type_vars st1), (type_expr tyenv level_for_new_tvar type_vars st2))
-        | STtuple stl -> Ttuple (List.map (type_expr tyenv level_for_new_tvar type_vars) stl)
-        | STconstr (s, stl) ->
-            match tyenv.types.TryFind s with
-            | Some info ->
-                if List.length stl <> List.length info.ti_params then
-                    raise (Type_error (Wrong_arity_for_type s, sty.st_loc))
-                subst (List.zip info.ti_params (List.map (type_expr tyenv level_for_new_tvar type_vars) stl)) info.ti_res
-            | None -> raise (Type_error (Undefined_type_constructor s, sty.st_loc))
-
-    /// Define new type from Syntax.typedef
-    let add_typedef tyenv loc dl =
-    
-        // Checks new type names are lowercase.
-        for d in dl do
-            if is_constructor d.sd_name then
-                raise (Type_error (Invalid_type_name, d.sd_loc))
-    
-        // Checks duplicate in new type names.
-        all_differ loc kind.Type_name kind.Type_definition (List.map (fun td -> td.sd_name) dl)
-
-        // Check variant case names or record label names.
-        for d in dl do
-            match d.sd_kind with
-            | SKrecord fields ->
-                for name, _, _ in fields do
-                    if is_constructor name then
-                        raise (Type_error (Invalid_label_name, d.sd_loc))
-
-            | SKvariant cases ->
-                for name, _ in cases do
-                    if not (Char.IsUpper name.[0]) then
-                        raise (Type_error (Invalid_constructor_name, d.sd_loc))
-
-            | _ -> ()
-                
-        // Checks duplicates in variant names.
-        for d in dl do
-            match d.sd_kind with
-            | SKvariant cl ->
-                let constructors = List.map fst cl
-                all_differ d.sd_loc Constructor Type_definition constructors
-            | _ -> ()
-    
-        // Checks duplicates in record labels.
-        for d in dl do
-            match d.sd_kind with
-            | SKrecord fl ->
-                let labels = List.map (fun (labels, _, _) -> labels) fl
-                all_differ d.sd_loc Label Type_definition labels
-            | _ -> ()
-        
-        // Checks duplicates in type var name.
-        List.iter (fun td -> all_differ td.sd_loc kind.Type_parameter kind.Type_definition td.sd_params) dl
-
-        // Checks there is no circular type abbreviation.
-        let abbrev_defs = List.choose (function { Syntax.sd_kind = SKabbrev ty } as sd -> Some (sd, sd.sd_name, ty) | _ -> None) dl
-        let abbrev_defs_map = Map.ofList (List.map (fun (_, name, ty) -> (name, ty)) abbrev_defs)
-        let check_cyclic_abbrev (d : typedef) =
-            let name, ty = match d.sd_kind with SKabbrev ty -> d.sd_name, ty | _ -> dontcare()
-            let mutable visited = Set.ofArray [| name |]
-            let rec visit (ty : Syntax.type_expr) =
-                match ty.st_desc with
-                | STvar _ -> ()
-                | STarrow (ty1, ty2) -> visit ty1; visit ty2
-                | STtuple l -> List.iter visit l
-                | STconstr (name, args) ->
-                    if abbrev_defs_map.ContainsKey name then
-                        if visited.Contains name then
-                            raise (Type_error (Type_definition_contains_immediate_cyclic_type_abbreviation, loc))
-                        else
-                            visited <- Set.add name visited
-                            visit abbrev_defs_map.[name]
-                    List.iter visit args
-            visit ty
-        List.iter (fun (def, _, _) -> check_cyclic_abbrev def) abbrev_defs
-
-        // Create tyenv with dummy definitions.
-        let dl, tyenv_with_dummy_defs = list_mapFold (fun tyenv td ->
-            let id = type_id_new ()
-            // Create type var instance for type parameters.
-            let params' = List.map (fun _ -> { link = None; level = 0 }) td.sd_params
-            // Set the dummy type to the global table.
-            let ti = make_ti id td.sd_name params' Kbasic
-            (td, id, ti), Types.add_type tyenv ti) tyenv dl
-
-        /// Evaluate the type expressions syntax tree in environment with dummy types. 
-        let dl =
-            List.map (fun (td, id, ti_dummy) ->
-                // Craete type information from syntax tree.
-                // When type constructor is used in syntax tree, arity matching is checked.
-                // For recursive type definitions, arity is checked using dummy type info.
-                let type_vars = Dictionary<string, type_expr>()
-                List.iter2 (fun name tv -> type_vars.Add(name, (Tvar tv))) td.sd_params ti_dummy.ti_params
-                let kind = 
-                    match td.sd_kind with
-                    | SKabbrev sty -> Kabbrev (type_expr tyenv_with_dummy_defs None type_vars sty)
-                    | SKvariant cl -> Kvariant (List.mapi (fun i (s, stl) -> (s, i, (List.map (type_expr tyenv_with_dummy_defs None type_vars) stl))) cl)
-                    | SKrecord fl -> Krecord (List.map (fun (s, sty, access) -> (s, (type_expr tyenv_with_dummy_defs None type_vars sty), access)) fl)
-                let ti = { ti_dummy with ti_kind = kind }
-                (td, id, ti_dummy, ti)) dl
-    
-        // Create tyenv with real type information.
-        List.fold (fun tyenv (_, _, _, ti) -> Types.add_type tyenv ti) tyenv dl
-
-    let hide_type (tyenv : tyenv) name loc =
-            match tyenv.types.TryFind(name) with
-            | Some info ->
-                let id = match info.ti_res with Tconstr (id, _) -> id | _ -> dontcare()
-                if id <= id_option then
-                    raise (Type_error (Basic_types_cannot_be_hidden, loc))
-                match info.ti_kind with
-                | Kbasic -> raise (Type_error (Already_abstract name, loc))
-                | _ ->
-                    let tyenv = remove_type tyenv info
-                    let info = { info with ti_kind = Kbasic }
-                    add_type tyenv info
-            | None -> raise (Type_error (Undefined_type_constructor name, loc))
 
     /// Copy the type expression.
     /// When type var at generic level is found, replace it with newly created type var at current level.
@@ -976,9 +976,6 @@ type Typechecker() =
     member this.IsNonexpansive = is_nonexpansive
     member this.Generalize = generalize
     member this.Command = command
-    member this.AddTypedef = add_typedef
-    member this.HideType = hide_type
-    member this.TypeExpr = type_expr
     member this.UnifyExp = unify_exp
 
 let type_expression warning_sink tyenv (e : Syntax.expression) =
@@ -1044,11 +1041,11 @@ let type_command_list warning_sink tyenv cmds =
     for cmd in cmds do
         match cmd.sc_desc with
         | SCtype dl ->
-            let tyenv' = Typechecker().AddTypedef tyenv cmd.sc_loc dl
+            let tyenv' = add_typedef tyenv cmd.sc_loc dl
             tyenvs.Add(tyenv)
             tyenv <- tyenv'
         | SChide name -> 
-            let tyenv' = Typechecker().HideType tyenv name cmd.sc_loc
+            let tyenv' = hide_type tyenv name cmd.sc_loc
             tyenvs.Add(tyenv)
             tyenv <- tyenv'
         | SCremove name ->
@@ -1063,7 +1060,7 @@ let type_command_list warning_sink tyenv cmds =
         | SCexn (name, tyl) ->
             if not (Char.IsUpper name.[0]) then
                 raise (Type_error (Invalid_constructor_name, cmd.sc_loc))
-            let tyl = List.map (Typechecker().TypeExpr tyenv None (Dictionary<string, type_expr>())) tyl
+            let tyl = List.map (type_expr tyenv None (Dictionary<string, type_expr>())) tyl
             let tyenv', _ = add_exn_constructor tyenv name tyl
             tyenvs.Add(tyenv)
             tyenv <- tyenv'
