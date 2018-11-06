@@ -236,108 +236,172 @@ let hide_type (tyenv : tyenv) name loc =
                 add_type tyenv info
         | None -> raise (Type_error (Undefined_type_constructor name, loc))
 
-type Typechecker(warning_sink : warning_sink) =
+/// Unifies ty with 'a -> 'b where 'a and 'b are new type variable at current_level. Then returns ('a, 'b).
+/// If impossible, raises Unify.
+let filter_arrow tyenv current_level ty = 
+    match repr ty with
+    | Tarrow(_, ty1, ty2) -> ty1, ty2 // fast path
+    | ty -> 
+        let ty1 = new_tvar current_level
+        let ty2 = new_tvar current_level
+        unify tyenv ty (Tarrow ("", ty1, ty2))
+        ty1, ty2
 
-    /// Unifies ty with 'a -> 'b where 'a and 'b are new type variable at current_level. Then returns ('a, 'b).
-    /// If impossible, raises Unify.
-    let filter_arrow tyenv current_level ty = 
-        match repr ty with
-        | Tarrow(_, ty1, ty2) -> ty1, ty2 // fast path
-        | ty -> 
-            let ty1 = new_tvar current_level
-            let ty2 = new_tvar current_level
-            unify tyenv ty (Tarrow ("", ty1, ty2))
-            ty1, ty2
+/// Unifies ty with 'a -> 'b ... -> 'result where 'a, 'b, ... are new type variable at current_level.
+/// Then returns ['a, 'b, ..., 'result] where length of resultant list is n + 1.
+/// If impossible, raises Unify.
+let filter_arrow_n tyenv current_level n ty =
+    let rec loop n ty =
+        if n = 0 then [ty]
+        else
+            let ty1, ty2 = filter_arrow tyenv current_level ty
+            ty1 :: (loop (n - 1) ty2)
+    loop n ty
 
-    /// Unifies ty with 'a -> 'b ... -> 'result where 'a, 'b, ... are new type variable at current_level.
-    /// Then returns ['a, 'b, ..., 'result] where length of resultant list is n + 1.
-    /// If impossible, raises Unify.
-    let filter_arrow_n tyenv current_level n ty =
-        let rec loop n ty =
-            if n = 0 then [ty]
-            else
-                let ty1, ty2 = filter_arrow tyenv current_level ty
-                ty1 :: (loop (n - 1) ty2)
-        loop n ty
-
-    let rec is_record (tyenv : tyenv) (some_ty : type_expr option) =
-        match some_ty with
-        | Some ty ->
-            match expanded tyenv ty with
-            | Tconstr (id, _) as ty ->
-                match tyenv.types_of_id.TryFind(id) with
-                | Some ti ->
-                    match ti.ti_kind with
-                    | Krecord _ -> Some id
-                    | _ -> None
-                | _ -> dontcare()
-            | _ -> None
-        | _ -> None
-
-    /// Copy the type expression.
-    /// When type var at generic level is found, replace it with newly created type var at current level.
-    let instanciate_scheme current_level ty =
-        let vars = ref [] in
-        let rec inst ty =
-            match repr ty with
-            | Tvar tv when tv.level = generic_level ->
-                match assqo tv !vars with
-                | Some ty' -> ty'
-                | None ->
-                    let ty' = new_tvar current_level
-                    vars := (tv, ty') :: !vars
-                    ty'
-            | ty -> map_type inst ty
-        inst ty
-
-    /// Take constr_info, and copy the argument type expression and resultant type expression.
-    /// When type var is found, replace it with newly created type var at current level.
-    let instanciate_constr current_level info = 
-        let s = List.map (fun tv -> (tv, new_tvar current_level)) info.ci_params
-        let args = List.map (subst s) info.ci_args
-        let res = subst s info.ci_res
-        args, res
-
-    /// Take label_info, and copy the field type expression and resultant type expression.
-    /// When type var is found, replace it with newly created type var at current level.
-    let instanciate_label current_level info =
-        let s = List.map (fun tv -> (tv, new_tvar current_level)) info.li_params
-        let ty_field = subst s info.li_arg
-        let ty_rec = subst s info.li_res
-        ty_field, ty_rec
-
-    let instanciate_record tyenv current_level id_record =
-        let info = tyenv.types_of_id.[id_record]
-        let s = List.map (fun tv -> (tv, new_tvar current_level)) info.ti_params
-        let record_fields = List.mapi (fun i (name, ty, access) -> (name, (i, subst s ty, access))) (match info.ti_kind with Krecord l -> l | _ -> dontcare())
-        let ty_res = subst s info.ti_res
-        record_fields, ty_res
-
-    /// Unify two types. If failed, throws type error for the pattern.
-    let unify_pat tyenv pat ty1 ty2 = 
-        try unify tyenv ty1 ty2
-        with Unify -> raise (Type_error (Type_mismatch (tyenv, Pattern, ty1, ty2), pat.sp_loc))
-
-    /// Unify two types. If failed, throws type error.
-    let unify_exp tyenv exp ty ty_expected =
-        try unify tyenv ty ty_expected
-        with Unify -> raise (Type_error (Type_mismatch (tyenv, Expression, ty, ty_expected), exp.se_loc))
-
-    /// Pick the type information of variant type from constructor name.
-    /// If expected type is variant type and that type have definition for the used constructor name,
-    /// pick that type even if the constructor name is shadowed.
-    let pick_constr (tyenv : tyenv) (ty_hint : type_expr option) (name : string) =
-        match tyenv.constructors.FindAll name with
-        | [] -> None
-        | constrs ->
-            let ci_from_ty_hint =
-                match option_repr ty_hint with
-                | Some (Tconstr (id, _)) ->
-                    List.tryFind (function { ci_res = Tconstr (id', _) } -> id = id' | _ -> false) constrs
+let rec is_record (tyenv : tyenv) (some_ty : type_expr option) =
+    match some_ty with
+    | Some ty ->
+        match expanded tyenv ty with
+        | Tconstr (id, _) as ty ->
+            match tyenv.types_of_id.TryFind(id) with
+            | Some ti ->
+                match ti.ti_kind with
+                | Krecord _ -> Some id
                 | _ -> None
-            match ci_from_ty_hint with
-            | Some _ -> ci_from_ty_hint
-            | None -> Some (List.head constrs)
+            | _ -> dontcare()
+        | _ -> None
+    | _ -> None
+
+/// Copy the type expression.
+/// When type var at generic level is found, replace it with newly created type var at current level.
+let instanciate_scheme current_level ty =
+    let vars = ref [] in
+    let rec inst ty =
+        match repr ty with
+        | Tvar tv when tv.level = generic_level ->
+            match assqo tv !vars with
+            | Some ty' -> ty'
+            | None ->
+                let ty' = new_tvar current_level
+                vars := (tv, ty') :: !vars
+                ty'
+        | ty -> map_type inst ty
+    inst ty
+
+/// Take constr_info, and copy the argument type expression and resultant type expression.
+/// When type var is found, replace it with newly created type var at current level.
+let instanciate_constr current_level info = 
+    let s = List.map (fun tv -> (tv, new_tvar current_level)) info.ci_params
+    let args = List.map (subst s) info.ci_args
+    let res = subst s info.ci_res
+    args, res
+
+/// Take label_info, and copy the field type expression and resultant type expression.
+/// When type var is found, replace it with newly created type var at current level.
+let instanciate_label current_level info =
+    let s = List.map (fun tv -> (tv, new_tvar current_level)) info.li_params
+    let ty_field = subst s info.li_arg
+    let ty_rec = subst s info.li_res
+    ty_field, ty_rec
+
+let instanciate_record tyenv current_level id_record =
+    let info = tyenv.types_of_id.[id_record]
+    let s = List.map (fun tv -> (tv, new_tvar current_level)) info.ti_params
+    let record_fields = List.mapi (fun i (name, ty, access) -> (name, (i, subst s ty, access))) (match info.ti_kind with Krecord l -> l | _ -> dontcare())
+    let ty_res = subst s info.ti_res
+    record_fields, ty_res
+
+/// Returns true if all objects which will be created in evaluation of this expression are immutable and there is no side-effects to external objects.
+let rec is_nonexpansive (e : Syntax.expression) =
+    match e.se_desc with
+    | SEid _ | SEint _ | SEchar _ | SEfloat _ | SEstring _ | SEformat _ | SEfn _ -> true
+    | SElist (LKarray, _) | SEapply _ | SEset _ -> false
+    | SEconstr (_, l) -> List.forall is_nonexpansive l
+    | SEtuple l | SElist (LKlist, l) -> List.forall is_nonexpansive l
+    | SEurecord (orig, fields) ->
+        (match orig with None -> true | Some e -> is_nonexpansive e) &&
+        List.forall (fun (_, access, e) -> access = Immutable && is_nonexpansive e) fields
+    | SEbegin l -> List.forall cmd_nonexpansive l
+    | SEcase (e, cases) ->
+        is_nonexpansive e &&
+        List.forall (fun (_, ew, e) -> (match ew with Some ew -> is_nonexpansive ew | None -> true) && is_nonexpansive e) cases
+    | SEtry (e, cases) ->
+        is_nonexpansive e &&
+        List.forall (fun (_, _, e) -> is_nonexpansive e) cases
+    | SEifthenelse (e1, e2, e3) ->
+        is_nonexpansive e1 &&
+        is_nonexpansive e2 &&
+        (match e3 with Some e3 -> is_nonexpansive e3 | None -> true)
+    | SEfor (_, e1, _, e2, e3) -> is_nonexpansive e1 && is_nonexpansive e2 && is_nonexpansive e3
+    | SEwhile (e1, e2) -> is_nonexpansive e1 && is_nonexpansive e2
+    | SEtype (e, _) -> is_nonexpansive e
+    | SErecord _ 
+    | SEsetfield _ 
+    | SEgetfield _ -> dontcare()
+
+/// Returns true if all objects created in execution of commands are immutable.
+and cmd_nonexpansive cmd =
+    match cmd.sc_desc with
+    | SCexpr e -> is_nonexpansive e
+    | SCval l -> List.forall (fun (_, e) -> is_nonexpansive e) l
+    | SCfun _ -> true
+    | SCvar l -> List.forall (fun (_, e) -> is_nonexpansive e) l
+    | _ -> dontcare()
+
+let type_printf_cmds cmds ty_result = 
+    let rec loop = 
+        function 
+        | PrintfFormat.PrintfCommand.Text _ :: t -> loop t
+        | PrintfFormat.PrintfCommand.Spec { TypeChar = 's' } :: t -> Tarrow ("", ty_string, loop t)
+        | PrintfFormat.PrintfCommand.Spec { TypeChar = ('d' | 'x' | 'X') } :: t -> Tarrow ("", ty_int, loop t)
+        | PrintfFormat.PrintfCommand.Spec { TypeChar = ('f' | 'e' | 'E' | 'g' | 'G' | 'r') } :: t -> Tarrow ("", ty_float, loop t)
+        | [] -> ty_result
+        | _ -> raise PrintfFormat.InvalidFormatString
+    loop cmds
+
+/// Unify two types. If failed, throws type error for the pattern.
+let unify_pat tyenv pat ty1 ty2 = 
+    try unify tyenv ty1 ty2
+    with Unify -> raise (Type_error (Type_mismatch (tyenv, Pattern, ty1, ty2), pat.sp_loc))
+
+/// Unify two types. If failed, throws type error.
+let unify_exp tyenv exp ty ty_expected =
+    try unify tyenv ty ty_expected
+    with Unify -> raise (Type_error (Type_mismatch (tyenv, Expression, ty, ty_expected), exp.se_loc))
+
+/// Set genelic level to type vars with level > current_level.
+let rec generalize current_level ty = 
+    match repr ty with
+    | Tvar tv -> 
+        if tv.level > current_level then
+            tv.level <- generic_level
+    | ty -> do_type (generalize current_level) ty
+
+/// Set current level to type vars with level > current level.
+let rec make_nongen current_level ty = 
+    match repr ty with
+    | Tvar tv -> 
+        if tv.level > current_level then
+            tv.level <- current_level
+    | ty -> do_type (make_nongen current_level) ty
+
+/// Pick the type information of variant type from constructor name.
+/// If expected type is variant type and that type have definition for the used constructor name,
+/// pick that type even if the constructor name is shadowed.
+let pick_constr (tyenv : tyenv) (ty_hint : type_expr option) (name : string) =
+    match tyenv.constructors.FindAll name with
+    | [] -> None
+    | constrs ->
+        let ci_from_ty_hint =
+            match option_repr ty_hint with
+            | Some (Tconstr (id, _)) ->
+                List.tryFind (function { ci_res = Tconstr (id', _) } -> id = id' | _ -> false) constrs
+            | _ -> None
+        match ci_from_ty_hint with
+        | Some _ -> ci_from_ty_hint
+        | None -> Some (List.head constrs)
+
+type Typechecker(warning_sink : warning_sink) =
 
     let rec pattern tyenv (type_vars : Dictionary<string, type_expr>) (current_level : int) (ty_hint : type_expr option) (pat : Syntax.pattern) =
         match pat.sp_desc with
@@ -481,6 +545,7 @@ type Typechecker(warning_sink : warning_sink) =
                 with Unify -> raise (Type_error (Binding_types_are_inconsistent, pat.sp_loc))
             unify_pat tyenv b ty_b ty_a
             (ty_a, bnds_a)
+
     /// Type list of patterns. If there was duplicated name, throw type error.
     and pattern_list tyenv (type_vars : Dictionary<string, type_expr>) current_level loc (tyl_hint : type_expr option list) (patl : Syntax.pattern list) =
         let tyl, bndss = List.unzip (List.map2 (fun ty_hint pat -> pattern tyenv type_vars current_level ty_hint pat) tyl_hint patl)
@@ -491,70 +556,6 @@ type Typechecker(warning_sink : warning_sink) =
                         raise (Type_error ((Multiple_occurence (kind.Variable_name , s, kind.Pattern)), loc))) bnd;
                 bnd @ bnds)) bndss []
         (tyl, bnds)
-
-    /// Returns true if all objects which will be created in evaluation of this expression are immutable and there is no side-effects to external objects.
-    let rec is_nonexpansive (e : Syntax.expression) =
-        match e.se_desc with
-        | SEid _ | SEint _ | SEchar _ | SEfloat _ | SEstring _ | SEformat _ | SEfn _ -> true
-        | SElist (LKarray, _) | SEapply _ | SEset _ -> false
-        | SEconstr (_, l) -> List.forall is_nonexpansive l
-        | SEtuple l | SElist (LKlist, l) -> List.forall is_nonexpansive l
-        | SEurecord (orig, fields) ->
-            (match orig with None -> true | Some e -> is_nonexpansive e) &&
-            List.forall (fun (_, access, e) -> access = Immutable && is_nonexpansive e) fields
-        | SEbegin l -> List.forall cmd_nonexpansive l
-        | SEcase (e, cases) ->
-            is_nonexpansive e &&
-            List.forall (fun (_, ew, e) -> (match ew with Some ew -> is_nonexpansive ew | None -> true) && is_nonexpansive e) cases
-        | SEtry (e, cases) ->
-            is_nonexpansive e &&
-            List.forall (fun (_, _, e) -> is_nonexpansive e) cases
-        | SEifthenelse (e1, e2, e3) ->
-            is_nonexpansive e1 &&
-            is_nonexpansive e2 &&
-            (match e3 with Some e3 -> is_nonexpansive e3 | None -> true)
-        | SEfor (_, e1, _, e2, e3) -> is_nonexpansive e1 && is_nonexpansive e2 && is_nonexpansive e3
-        | SEwhile (e1, e2) -> is_nonexpansive e1 && is_nonexpansive e2
-        | SEtype (e, _) -> is_nonexpansive e
-        | SErecord _ 
-        | SEsetfield _ 
-        | SEgetfield _ -> dontcare()
-
-    /// Returns true if all objects created in execution of commands are immutable.
-    and cmd_nonexpansive cmd =
-        match cmd.sc_desc with
-        | SCexpr e -> is_nonexpansive e
-        | SCval l -> List.forall (fun (_, e) -> is_nonexpansive e) l
-        | SCfun _ -> true
-        | SCvar l -> List.forall (fun (_, e) -> is_nonexpansive e) l
-        | _ -> dontcare()
-
-    /// Set genelic level to type vars with level > current_level.
-    let rec generalize current_level ty = 
-        match repr ty with
-        | Tvar tv -> 
-            if tv.level > current_level then
-                tv.level <- generic_level
-        | ty -> do_type (generalize current_level) ty
-
-    /// Set current level to type vars with level > current level.
-    let rec make_nongen current_level ty = 
-        match repr ty with
-        | Tvar tv -> 
-            if tv.level > current_level then
-                tv.level <- current_level
-        | ty -> do_type (make_nongen current_level) ty
-
-    let type_printf_cmds cmds ty_result = 
-        let rec loop = 
-            function 
-            | PrintfFormat.PrintfCommand.Text _ :: t -> loop t
-            | PrintfFormat.PrintfCommand.Spec { TypeChar = 's' } :: t -> Tarrow ("", ty_string, loop t)
-            | PrintfFormat.PrintfCommand.Spec { TypeChar = ('d' | 'x' | 'X') } :: t -> Tarrow ("", ty_int, loop t)
-            | PrintfFormat.PrintfCommand.Spec { TypeChar = ('f' | 'e' | 'E' | 'g' | 'G' | 'r') } :: t -> Tarrow ("", ty_float, loop t)
-            | [] -> ty_result
-            | _ -> raise PrintfFormat.InvalidFormatString
-        loop cmds
 
     let rec expression (tyenv : tyenv) (type_vars : Dictionary<string, type_expr>) (current_level : int) (ty_hint : type_expr option) (e : expression) =
       let ty =
@@ -973,14 +974,11 @@ type Typechecker(warning_sink : warning_sink) =
         | _ -> dontcare()
 
     member this.Expression = expression
-    member this.IsNonexpansive = is_nonexpansive
-    member this.Generalize = generalize
     member this.Command = command
-    member this.UnifyExp = unify_exp
 
 let type_expression warning_sink tyenv (e : Syntax.expression) =
     let ty = Typechecker(warning_sink).Expression tyenv (Dictionary<string, type_expr>()) 1 None e
-    if Typechecker(warning_sink).IsNonexpansive e then Typechecker(warning_sink).Generalize 0 ty
+    if is_nonexpansive e then generalize 0 ty
     ty
 
 let type_command warning_sink tyenv (cmd : Syntax.command) =
@@ -1103,11 +1101,11 @@ let type_command_list warning_sink tyenv cmds =
                     let ty_res = new_tvar 1
                     for action in actions do
                         let ty_action = Typechecker(warning_sink).Expression tyenv_with_arg_defs (Dictionary<string, type_expr>()) 1 None action
-                        Typechecker(warning_sink).UnifyExp tyenv_with_arg_defs action ty_action ty_res
+                        unify_exp tyenv_with_arg_defs action ty_action ty_res
                     let ty_fun = List.foldBack2 (fun name ty1 ty2 -> Tarrow (name, ty1, ty2)) (args @ ["lexbuf"]) (List.map (fun (_, info : value_info) -> info.vi_type) arg_infos) ty_res
                     new_values.Add((name, ty_fun))
                 let new_values = new_values.ToArray()
-                Array.iter (fun (_, ty) -> Typechecker(warning_sink).Generalize 0 ty) new_values
+                Array.iter (fun (_, ty) -> generalize 0 ty) new_values
                 for i = 0 to rules.Length - 1 do
                     let _, dummy_info = dummy_infos.[i]
                     let _, ty = new_values.[i]
