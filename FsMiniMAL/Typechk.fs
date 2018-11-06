@@ -932,7 +932,7 @@ type Typechecker(warning_sink : warning_sink, tyenv : tyenv, current_level : int
     /// Infer the type of expression with expectation. The expectation is used as a hint.
     /// Returns unit and the result remains in the ty_expected.
     /// Throws type error if failed.
-    and expression_expect ty_expected e : unit =
+    and expression_expect ty_expected e =
         let ty = expression (Some ty_expected) e
         unify_exp tyenv e ty ty_expected
 
