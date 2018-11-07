@@ -816,23 +816,20 @@ type Typechecker(warning_sink : warning_sink, tyenv : tyenv, current_level : int
             List.foldBack2 (fun name ty1 ty2 -> Tarrow (name, ty1, ty2)) names ty_args ty_res
         | SEbegin cl ->
             let cl', res = split_last cl
-
-            match res.sc_desc with
-            | SCexpr e1 ->
-                let oldTyenv = tyenv
-                List.iter (fun c ->
-                    let new_bnds = command c
-                    tyenv <- Types.add_values tyenv new_bnds) cl' 
-                let tyResult = expression ty_hint e1
-                tyenv <- oldTyenv
-                tyResult
-            | _ ->
-                let oldTyenv = tyenv
-                List.iter (fun c ->
-                    let new_bnds = command c
-                    tyenv <- Types.add_values tyenv new_bnds) cl |> ignore
-                tyenv <- oldTyenv
-                ty_unit
+            let oldTyenv = tyenv
+            List.iter (fun c ->
+                let new_bnds = command c
+                tyenv <- Types.add_values tyenv new_bnds) cl'
+            let tyResult =
+                match res.sc_desc with
+                | SCexpr e1 ->
+                    expression ty_hint e1
+                | _ ->
+                    let new_bnds = command res
+                    tyenv <- Types.add_values tyenv new_bnds
+                    ty_unit
+            tyenv <- oldTyenv
+            tyResult
         | SEcase (e, cases) ->
             let ty_arg = expression None e
             let ty_res = new_tvar current_level
