@@ -16,16 +16,17 @@ type Mode =
 
 type Frame = { v0 : MalValue; v1 : MalValue; mutable i : int }
 
-let [<Literal>] Uncomparable = 0x80000000
-let [<Literal>] Nan          = 0x80000001
+let [<Literal>] Nan                = 0x80000000
+let [<Literal>] FunctionalValue    = 0x80000001
+let [<Literal>] UncomparableObject = 0x80000002
+let [<Literal>] StackOverflow      = 0x80000003
 
-let initial : Frame array = [||]
+let dummy : Frame array = [||]
 
 type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
     let mutable accu = 0
     let mutable stack_topidx = -1
-    let mutable stack = initial
-    let mutable message : string = null
+    let mutable stack = dummy
 
     let stack_push frame =
         stack_topidx <- stack_topidx + 1
@@ -72,11 +73,9 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
                 stack_push { v0 = v0; v1 = v1; i = 0 }
         | (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE),
           (MalValueKind.FUNC|MalValueKind.KFUNC|MalValueKind.PARTIAL|MalValueKind.CLOSURE|MalValueKind.COROUTINE) ->
-            accu <- Uncomparable
-            message <- "functional value"
+            accu <- FunctionalValue
         | MalValueKind.OBJ, MalValueKind.OBJ ->
-            accu <- Uncomparable
-            message <- "Uncomparable object"
+            accu <- UncomparableObject
         | _ -> dontcare()
     
     let isFinished() = stack_topidx = -1 || accu <> 0
@@ -107,13 +106,14 @@ type MalCompare(mm : MemoryManager, mode : Mode, argv : MalValue array) =
             | _ -> dontcare()
 
             if stack_topidx + 1 >= mm.maximum_compare_stack_depth then
-                accu <- Uncomparable
-                message <- "stack overflow"
+                accu <- StackOverflow
     
     let result() =
-        if accu = Uncomparable then
-            mal_failwith mm ((match mode with Compare -> "compare: " | _ -> "equal: ") + message)
-        else
+        match accu with
+        | FunctionalValue -> mal_failwith mm ((match mode with Compare -> "compare" | _ -> "equal") + ": functional value")
+        | UncomparableObject -> mal_failwith mm ((match mode with Compare -> "compare" | _ -> "equal") + ": uncomparable object")
+        | StackOverflow -> mal_failwith mm ((match mode with Compare -> "compare" | _ -> "equal") + ": stack overflow")
+        | _ ->
             match mode with
             | Compare -> ofCompare accu
             | Equal -> ofBool (accu = 0)
