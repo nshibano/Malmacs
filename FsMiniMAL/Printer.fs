@@ -176,9 +176,9 @@ type ValuePrinter(tyenv : tyenv, limit : int) =
                 variantNode (path.Add(value)) level name (info.ci_args) fields
             with _ -> invalidNode()
         | Tconstr(id, tyl), _ ->
-            match tyenv.types_of_id.TryFind id with
-            | None -> invalidNode()
-            | Some info ->
+            match tyenv.types_of_id.TryGetValue id with
+            | false, _ -> invalidNode()
+            | true, info ->
                 let sl = List.zip info.ti_params tyl
                 match info.ti_kind with
                 | Kbasic ->
@@ -299,26 +299,26 @@ let node_of_type_expr (tyenv : tyenv) name_of_var is_scheme ty =
             else node
         | Tconstr(type_id.EXN, []) -> textNode "exn"
         | Tconstr(id, []) ->
-            match tyenv.types_of_id.TryFind id with
-            | Some ty -> textNode ty.ti_name
-            | None -> dontcare()
+            match tyenv.types_of_id.TryGetValue id with
+            | true, ty -> textNode ty.ti_name
+            | false, _ -> dontcare()
         | Tconstr(id, ([ ty ])) ->
-            match tyenv.types_of_id.TryFind id with
-            | Some ti ->
+            match tyenv.types_of_id.TryGetValue id with
+            | true, ti ->
                 let accu = List()
                 accu.Add(loop false 2 ty)
                 accu.Add(textNode ti.ti_name)
                 createSection Flow 0 (accu.ToArray())
-            | None -> dontcare()
+            | false, _ -> dontcare()
         | Tconstr(id, l) ->
-            match tyenv.types_of_id.TryFind id with
-            | Some ti ->
+            match tyenv.types_of_id.TryGetValue id with
+            | true, ti ->
                 let accu = List()
                 let comma() =
                     weld accu.[accu.Count - 1] ","
                 print_list (fun ty -> accu.Add(loop false 0 ty)) comma l                
                 createSection Flow 0 [| parenthesize (createSection Flow 0 (accu.ToArray())); textNode ti.ti_name |]
-            | None -> dontcare()
+            | false, _ -> dontcare()
     loop true 0 ty
 
 let create_tvar_assoc_table () = 

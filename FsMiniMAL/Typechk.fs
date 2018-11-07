@@ -263,8 +263,8 @@ let rec is_record (tyenv : tyenv) (some_ty : type_expr option) =
     | Some ty ->
         match expanded tyenv ty with
         | Tconstr (id, _) as ty ->
-            match tyenv.types_of_id.TryFind(id) with
-            | Some ti ->
+            match tyenv.types_of_id.TryGetValue(id) with
+            | true, ti ->
                 match ti.ti_kind with
                 | Krecord _ -> Some id
                 | _ -> None

@@ -47,8 +47,8 @@ let rec expanded (tyenv : tyenv) ty =
     let ty = repr ty
     match ty with
     | Tconstr(id, ty_args) ->
-        match tyenv.types_of_id.TryFind(id) with
-        | Some ({ ti_kind = Kabbrev ty' } as info) -> expanded tyenv (subst (List.zip info.ti_params ty_args) ty')
+        match tyenv.types_of_id.TryGetValue(id) with
+        | true, ({ ti_kind = Kabbrev ty' } as info) -> expanded tyenv (subst (List.zip info.ti_params ty_args) ty')
         | _ -> ty
     | _ -> ty
 

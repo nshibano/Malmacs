@@ -143,7 +143,7 @@ let ti_lexbuf = make_ti type_id.LEXBUF "lexbuf" [] (Krecord [("lbSource", ty_str
 
 type tyenv =
     { types :  MultiStrMap<type_info>
-      types_of_id : Map<type_id, type_info>
+      types_of_id : ImmutableDictionary<type_id, type_info>
       constructors : MultiStrMap<constr_info>
       exn_constructors : (string * constr_info) array
       labels :  MultiStrMap<label_info>
@@ -416,7 +416,7 @@ let register_fsharp_types tyenv (types : (string * Type) array) =
 let tyenv_basic, id_ref, id_option, tag_exn_Failure, tag_exn_Division_by_zero, tag_exn_Index_out_of_range, tag_exn_Invalid_argument, tag_exn_Match_failure =
     let tyenv =
         { tyenv.types =  MultiStrMap.Empty
-          types_of_id = Map.empty
+          types_of_id = ImmutableDictionary.Empty
           constructors = MultiStrMap.Empty
           exn_constructors = [||]
           labels =  MultiStrMap.Empty
