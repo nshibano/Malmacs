@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Text
 open System.Diagnostics
+open FSharp.Reflection
 
 open FsMiniMAL.Lexing
 open Syntax
@@ -12,19 +13,30 @@ open Typechk
 open Value
 
 let src = """
+type foo = Foo | Bar of int;
+val l = [Foo, Bar 0];
 val x = 0 + 1;
 val y = x + x;
 fun f x = if x < 0 then 1 else x * 100;
 """
+
+let escape (s : string) = "\"" + s + "\""
+
+let getUnionCaseName<'T > (x : 'T) : string =
+    if FSharpType.IsUnion(typeof<'T>) then
+        let a, b = FSharpValue.GetUnionFields(x, typeof<'T>)
+        a.Name
+    else
+        failwith "not union type"
 
 [<EntryPoint>]
 let main argv =
     let lexbuf = LexBuffer<char>.FromString src
     lexbuf.EndPos <- { lexbuf.EndPos with pos_fname = dummy_file_name }
     lexbuf.BufferLocalStore.["src"] <- src
-    let cmds, store = Parser.Program Lexer.main lexbuf
+    let cmds, _ = Parser.Program Lexer.main lexbuf
 
-    let tyenv = FsMiniMAL.Top.tyenv_std
+    let mutable tyenv = FsMiniMAL.Top.tyenv_std
     let rec cmdLoop (cmd : Syntax.command) =
         match cmd.sc_desc with
         | SCval l
@@ -35,20 +47,17 @@ let main argv =
         | SCCvar (l, _) -> for (_, e) in l do exprLoop e
         | _ -> ()
     and exprLoop (e : Syntax.expression) =
-        match e.se_desc with
-        | SEid s -> printfn "%s [%d, %d) %d %s" s e.se_loc.st.AbsoluteOffset e.se_loc.ed.AbsoluteOffset (e.se_loc.ed.AbsoluteOffset - e.se_loc.st.AbsoluteOffset) (match e.se_type with None -> "?" | Some ty -> (fst (Printer.print_type tyenv 1000 ty)))
-        | SEbegin l -> List.iter cmdLoop l
-        | _ -> Syntax.expressionDo exprLoop e
-
-
+        Syntax.expressionDo exprLoop e
+        let st = e.se_loc.st.AbsoluteOffset
+        let ed = e.se_loc.ed.AbsoluteOffset
+        printfn "%-12s %-40s [%3d, %3d) %s" (getUnionCaseName e.se_desc) (escape (src.Substring(st, ed - st))) st ed (match e.se_type with None -> "?" | Some ty -> (fst (Printer.print_type tyenv 1000 ty)))
 
     List.iter cmdLoop cmds
 
     printfn "----"
-    Typechk.type_command_list ignore tyenv cmds |> ignore
 
-
-    
+    let tyenvs = Typechk.type_command_list ignore tyenv cmds
+    tyenv <- tyenvs.[tyenvs.Length - 1]
     List.iter cmdLoop cmds
 
     Console.ReadKey() |> ignore
