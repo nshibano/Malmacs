@@ -17,6 +17,24 @@ let sizeof_block len = block_overhead + value_array_increment * len
 let sizeof_array len = array_overhead + value_array_increment * len
 let sizeof_string len = string_overhead + string_increment * len
 
+type MemoryManager =
+    {       
+      /// Total bytes used by mal values this interpreter owns.
+      /// This field is increased when new mal value is created, and decreased when mal value is freed by CLR garbage collector. 
+      mutable counter : int
+
+      /// When counter value exceedes this limit, GC will be called.
+      bytes_trigger_gc : int
+
+      /// After GC, if the counter still exceeds this limit, interpreter is stopped.
+      bytes_stop_exec : int
+      
+      maximum_array_length : int
+      maximum_stack_depth : int
+      maximum_compare_stack_depth : int
+      coroutine_initial_ticks : int
+    }
+
 // The value type is defined as regular class (not discriminated unions) to
 // allow only some kind of them have overridden Finalize method.
 // Doing so minimizes number of objects which goes to "finalizer queue" of CLR runtime.
@@ -38,28 +56,28 @@ type MalValueKind =
 type MalValue (kind : MalValueKind) =
     member x.Kind = kind
 
-and MalInt (i : int) =
+type MalInt (i : int) =
     inherit MalValue(MalValueKind.INT)
     member x.Get = i
 
-and MalFloat (x : float) =
+type MalFloat (x : float) =
     inherit MalValue(MalValueKind.FLOAT)
     member this.Get = x
 
-and MalString (s : string, mm : MemoryManager) =
+type MalString (s : string, mm : MemoryManager) =
     inherit MalValue(MalValueKind.STRING)
     member x.Get = s
     override x.Finalize() =
         Interlocked.Add(&mm.counter, - sizeof_string s.Length) |> ignore
 
-and MalBlock (tag : int, fields : MalValue array, mm : MemoryManager) =
+type MalBlock (tag : int, fields : MalValue array, mm : MemoryManager) =
     inherit MalValue(MalValueKind.BLOCK)
     member x.Tag = tag
     member x.Fields = fields
     override x.Finalize() =
         Interlocked.Add(&mm.counter, - sizeof_block fields.Length) |> ignore
 
-and MalArray (count : int, storage: MalValue array, mm : MemoryManager) =
+type MalArray (count : int, storage: MalValue array, mm : MemoryManager) =
     inherit MalValue(MalValueKind.ARRAY)
     let mutable count = count
     let mutable storage = storage
@@ -69,47 +87,47 @@ and MalArray (count : int, storage: MalValue array, mm : MemoryManager) =
     override x.Finalize() =
         Interlocked.Add(&mm.counter, - sizeof_array storage.Length) |> ignore
 
-and MalFunc(arity : int, f : MemoryManager -> MalValue array -> MalValue) =
+type MalFunc(arity : int, f : MemoryManager -> MalValue array -> MalValue) =
     inherit MalValue(MalValueKind.FUNC)
     member x.Arity = arity
     member x.F = f
 
-and MalKFunc(arity : int, f : MemoryManager -> MalValue array -> MalValue array) =
+type MalKFunc(arity : int, f : MemoryManager -> MalValue array -> MalValue array) =
     inherit MalValue(MalValueKind.KFUNC)
     member x.Arity = arity
     member x.F = f
 
-and MalCoroutine(arity : int, starter : MemoryManager -> MalValue array -> IMalCoroutine) =
+type IMalCoroutine =
+    inherit IDisposable
+    abstract member IsFinished : bool
+    abstract member Run : milliseconds : int -> unit
+    abstract member Result : MalValue
+
+type MalCoroutine(arity : int, starter : MemoryManager -> MalValue array -> IMalCoroutine) =
     inherit MalValue(MalValueKind.COROUTINE)
     member x.Arity = arity
     member x.Starter = starter
 
-and MalClosure(arity : int, envSize : int, captures : MalValue array, code : code) =
+type MalPartial (arity : int, args : MalValue array) =
+    inherit MalValue(MalValueKind.PARTIAL)
+    member x.Arity = arity
+    member x.Args = args
+
+type MalVar (value : MalValue) =
+    inherit MalValue(MalValueKind.VAR)
+    let mutable content = value
+    member var.Content with get() = content and set x = content <- x
+
+type MalObj (obj : obj) =
+    inherit MalValue(MalValueKind.OBJ)
+    member x.Obj = obj
+
+type MalClosure(arity : int, envSize : int, captures : MalValue array, code : code) =
     inherit MalValue(MalValueKind.CLOSURE)
     member x.Arity = arity
     member x.EnvSize = envSize
     member x.Captures = captures
     member x.Code = code
-
-and MalPartial (arity : int, args : MalValue array) =
-    inherit MalValue(MalValueKind.PARTIAL)
-    member x.Arity = arity
-    member x.Args = args
-
-and MalVar (value : MalValue) =
-    inherit MalValue(MalValueKind.VAR)
-    let mutable content = value
-    member var.Content with get() = content and set x = content <- x
-
-and MalObj (obj : obj) =
-    inherit MalValue(MalValueKind.OBJ)
-    member x.Obj = obj
-
-and IMalCoroutine =
-    inherit IDisposable
-    abstract member IsFinished : bool
-    abstract member Run : milliseconds : int -> unit
-    abstract member Result : MalValue
 
 and code =
   // expressions
@@ -162,24 +180,6 @@ and pattern =
   | UParray of pattern array
   | UPor of pattern * pattern
   | UPany
-
-and MemoryManager =
-    {       
-      /// Total bytes used by mal values this interpreter owns.
-      /// This field is increased when new mal value is created, and decreased when mal value is freed by CLR garbage collector. 
-      mutable counter : int
-
-      /// When counter value exceedes this limit, GC will be called.
-      bytes_trigger_gc : int
-
-      /// After GC, if the counter still exceeds this limit, interpreter is stopped.
-      bytes_stop_exec : int
-      
-      maximum_array_length : int
-      maximum_stack_depth : int
-      maximum_compare_stack_depth : int
-      coroutine_initial_ticks : int
-    }
 
 let memory_manager_create_default() =
     {
