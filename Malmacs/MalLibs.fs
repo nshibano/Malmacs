@@ -106,7 +106,8 @@ let add (mal : Interpreter) =
     mal.Fun("jsonParse", (fun mm s ->
         try MalJson.parse s with
         | MalJson.InvalidChar pos -> mal_failwith mm (sprintf "Invalid char at pos %d" pos)
-        | MalJson.UnexpectedEof -> mal_failwith mm "Unexpected EOF"))
+        | MalJson.UnexpectedEof -> mal_failwith mm "Unexpected EOF"
+        | MalJson.NestingLimit ->  mal_failwith mm "Nesting limit"))
 
     mal.Fun("jsonPrint", (fun mm (singleLine : bool) (json : MalJson.json) ->
         try MalJson.print singleLine json with

@@ -25,10 +25,13 @@ type json =
 
 exception InvalidChar of int
 exception UnexpectedEof
+exception NestingLimit
+let nestingLimit = 100
 
 type private Parser(s : string) =
 
     let mutable pos = 0
+    let mutable nestingCount = 0
 
     let invalidChar() = raise (InvalidChar pos)
 
@@ -133,6 +136,7 @@ type private Parser(s : string) =
         buf.ToString()
 
     let rec parseValue (isRoot : bool) =
+        if nestingLimit < nestingCount then raise NestingLimit
         skipWhitespace()
         let c = s.[pos]
         if isRoot && not (c = '{' || c = '[') then
@@ -151,6 +155,7 @@ type private Parser(s : string) =
             else invalidChar()
 
     and parseArray() =
+        nestingCount <- nestingCount + 1
         let values = ResizeArray()
         skip "["
         skipWhitespace()
@@ -170,6 +175,7 @@ type private Parser(s : string) =
                     cont <- false
                     pos <- pos + 1
                 | _ -> invalidChar()
+        nestingCount <- nestingCount - 1
         json.Jarray(values.ToArray())
 
     and parsePair() =
@@ -180,6 +186,7 @@ type private Parser(s : string) =
         key, parseValue false
     
     and parseObject() =
+        nestingCount <- nestingCount + 1
         let pairs = ResizeArray()
         skip "{"
         skipWhitespace()
@@ -201,6 +208,7 @@ type private Parser(s : string) =
         | '}' ->
             pos <- pos + 1
         | _ -> invalidChar()
+        nestingCount <- nestingCount - 1
         json.Jobject(pairs.ToArray())
 
     member x.Parse() =
