@@ -744,17 +744,16 @@ module Doc =
                 let x = x0 + row.XOffsets.[i]
                 let w = row.XOffsets.[i + 1] - row.XOffsets.[i]
                 let range = doc.Selection.ToRange()
-                let rectXOfs = -1
                 if range.Contains (rowRange.rBegin + row.CharOffsets.[i]) then
-                    let mutable rect = Win32.RECT(left = x + rectXOfs, top = y, right = x + w, bottom = y + li.LineHeight)
+                    let mutable rect = Win32.RECT(left = x, top = y, right = x + w, bottom = y + li.LineHeight)
                     Win32.FillRect(hdc, &rect, selected_brush) |> ignore
                 elif Option.isSome colorInfo.ciBackColor then
-                    let mutable rect = Win32.RECT(left = x + rectXOfs, top = y, right = x + w, bottom = y + li.LineHeight)
+                    let mutable rect = Win32.RECT(left = x, top = y, right = x + w, bottom = y + li.LineHeight)
                     let brush = Win32.CreateSolidBrush(Win32.colorref_of_color(colorInfo.ciBackColor.Value))
                     Win32.FillRect(hdc, &rect, brush) |> ignore
                     Win32.DeleteObject(brush) |> ignore
                 if Option.isSome colorInfo.ciUnderlineColor then
-                    let mutable rect = Win32.RECT(left = x + rectXOfs, top = y + li.LineHeight - (max 2 (li.FontSize / 10)) - li.Padding, right = x + w, bottom = y + li.LineHeight - li.Padding)
+                    let mutable rect = Win32.RECT(left = x, top = y + li.LineHeight - (max 2 (li.FontSize / 10)) - li.Padding, right = x + w, bottom = y + li.LineHeight - li.Padding)
                     let brush = Win32.CreateSolidBrush(Win32.colorref_of_color(colorInfo.ciUnderlineColor.Value))
                     Win32.FillRect(hdc, &rect, brush) |> ignore
                     Win32.DeleteObject(brush) |> ignore
