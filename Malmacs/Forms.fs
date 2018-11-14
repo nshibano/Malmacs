@@ -689,18 +689,24 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
     let vScroll = new VScrollBar()
     let hScroll = new HScrollBar()
     let contextMenu = new ContextMenuStrip()
-
-    let cols = 100
-
     let mutable state = EditorState.Idle
     let mutable highlightingState = EditorHighlightingState.EHSdone
     let mutable lastlyHighlightingInitiatedContentId = -1
     let mutable hasCaret = false
+
+    let mutable cols =
+        try MalJson.toInt (MalJson.find config ["cols"])
+        with _ -> 1000
+
+    let createLayoutInfo fontSize =
+        let info = DocLayoutInfo.Default 1000 fontSize
+        { info with PageWidth = cols * (Doc.measure info "a") }
+
     let undoTree : UndoTree<Doc> =
-        let info = DocLayoutInfo.Default 1000 20
-        let info = { info with PageWidth = cols * (Doc.measure info "a") }
+        let info = createLayoutInfo 20
         let doc = Doc.createFromString info (match textFileHandle with Some handle -> handle.LatestText | None -> "")
         UndoTree.Create(doc)
+    
     let mutable lastlySavedRevision = 0
     let mutable topRowIndex = 0
     let mutable xOffset = 0
@@ -970,7 +976,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
             
             // right boundary of page
             if drawPageBoundary then
-                let x = linenoWidth + leftMargin + doc.LayoutInfo.PageWidth
+                let x = linenoWidth + leftMargin + doc.LayoutInfo.PageWidth - xOffset
                 g.DrawLine(Pens.LightGray, x, clientRectangle.Top, x, clientRectangle.Bottom)
 
             buffer.Render()
@@ -1113,7 +1119,7 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
                 else
                     fontSizeSeries.[max (i - 1) 0]
 
-            let newLayoutInfo = DocLayoutInfo.Default (newSize / 2 * cols) newSize
+            let newLayoutInfo = createLayoutInfo newSize
             undoTree.Amend(Doc.changeLayout newLayoutInfo undoTree.Get)
             resetCaretXPos()
             upd false
