@@ -148,11 +148,11 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
 
     let print_new_values new_values = 
         let new_values = List.map (fun (name, info) ->
-            let var_info = alloc.Get(name)
+            let allocInfo = alloc.Get(name)
             let value =
-                match var_info.access with
-                | Immutable -> env.[var_info.ofs]
-                | Mutable -> (env.[var_info.ofs] :?> MalVar).Content
+                match allocInfo.access with
+                | Immutable -> env.[allocInfo.ofs]
+                | Mutable -> (env.[allocInfo.ofs] :?> MalVar).Content
             (name, value, info)) new_values
         send_message (Message.NewValues (tyenv, new_values))
     

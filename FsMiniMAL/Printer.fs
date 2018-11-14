@@ -442,10 +442,6 @@ let print_definition (define : tyenv) cols name (info : value_info) (value : Mal
 
     let accu2 = List()
     accu2.Add(node1)
-    let value =
-        match info.vi_access with
-        | Immutable -> value
-        | Mutable -> (value :?> Value.MalVar).Content
     accu2.Add(node_of_value define info.vi_type value)
     let node2 = createSection Flow 1 (accu2.ToArray())
     update_sizes node2
