@@ -400,7 +400,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
         
         let tickCountAtStart = Environment.TickCount
         
-        while state = State.Running && (Environment.TickCount - tickCountAtStart) < sliceTicks do
+        while state = State.Running && (sliceTicks = Int32.MaxValue || (Environment.TickCount - tickCountAtStart) < sliceTicks) do
             let code = stack.[stack_topidx].code
             let frame = stack.[stack_topidx].frame
             match code with
