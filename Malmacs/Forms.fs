@@ -757,10 +757,10 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         vScroll.Maximum <- max 0 (doc.RowCount + textArea.Height / lineHeight - 2)
         vScroll.SmallChange <- 1
         vScroll.LargeChange <- max (textArea.Height / lineHeight) 1
-        topRowIndex <- max 0 (min topRowIndex vScroll.MaximumValueThatCanBeReachedThroughUserInteraction)
         if scrollToCaret then
             let caretRowIndex = Doc.getRowIndexFromCharPos doc doc.Selection.sCaretPos
             topRowIndex <- max (caretRowIndex - (max 1 textArea.Height / lineHeight) + 1) (min topRowIndex caretRowIndex)
+        topRowIndex <- max 0 (min topRowIndex vScroll.MaximumValueThatCanBeReachedThroughUserInteraction)
         vScroll.Value <- topRowIndex
 
         hScroll.Bounds <- Rectangle(0, clientRectangle.Bottom - statusHeight - hScroll.Height, clientRectangle.Width - vScroll.Width, hScroll.Height)
@@ -768,10 +768,10 @@ and Editor(repl : Repl, textFileHandle : FileHelper.TextFileHandle option) as th
         hScroll.Maximum <- max 0 (doc.RowTree.RootMeasure.MaximumWidth + rightMargin)
         hScroll.SmallChange <- 1
         hScroll.LargeChange <- max 0 (textArea.Width - linenoWidth - leftMargin)
-        xOffset <- max 0 (min xOffset hScroll.MaximumValueThatCanBeReachedThroughUserInteraction)
         if scrollToCaret then
             let caretXOffset = (Doc.getCaretPoint doc).X
             xOffset <- max (caretXOffset - (textArea.Width - linenoWidth - leftMargin - rightMargin)) (min xOffset caretXOffset)
+        xOffset <- max 0 (min xOffset hScroll.MaximumValueThatCanBeReachedThroughUserInteraction)
         hScroll.Value <- xOffset
 
         let p0 = Doc.getCaretPoint doc
