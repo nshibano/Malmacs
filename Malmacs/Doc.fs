@@ -188,7 +188,7 @@ module Doc =
     /// If there is no item which is lower than the key, returns -1.
     /// Therefore, -1 <= returnValue <= table.Length - 1.
     /// The table must be sorted in ascending order.
-    let binchopLeft (table : int array) (key : int) =
+    let binchopFloor (table : int array) (key : int) =
         
         let rec loop i j =
             if j - i = 1 then
@@ -212,7 +212,7 @@ module Doc =
     /// If there is no item which is higher than the key, returns table.Length.
     /// Therefore, 0 <= returnValue <= table.Length.
     /// The table must be sorted in ascending order.
-    let binchopRight (table : int array) (key : int) =
+    let binchopCeil (table : int array) (key : int) =
 
         if table.Length = 0 then raise (ArgumentException())
         
@@ -394,7 +394,7 @@ module Doc =
         else
             let rowIndex = getRowIndexFromCharPos doc charPos
             let row, rowRange = getRow doc rowIndex
-            let binchop = if rightNotLeft then binchopRight else binchopLeft
+            let binchop = if rightNotLeft then binchopCeil else binchopFloor
             let i = binchop row.CharOffsets (charPos - rowRange.rBegin)
             rowRange.rBegin + row.CharOffsets.[i]
 
@@ -559,7 +559,7 @@ module Doc =
     let getSymbolFromCharPos (doc : Doc) (charPos : int) =
         let rowIndex = getRowIndexFromCharPos doc charPos
         let row, rowRange = getRow doc rowIndex
-        let symbolIndexInRow = binchopLeft row.CharOffsets (charPos - rowRange.rBegin)
+        let symbolIndexInRow = binchopFloor row.CharOffsets (charPos - rowRange.rBegin)
         let ofs = row.CharOffsets.[symbolIndexInRow]
         let len = row.CharOffsets.[symbolIndexInRow + 1] - row.CharOffsets.[symbolIndexInRow]
         row.String.Substring(ofs, len)
@@ -577,7 +577,7 @@ module Doc =
         let rowIndex = getRowIndexFromCharPos doc charPos
         let y = doc.LayoutInfo.LineHeight * rowIndex
         let row, rowRange = getRow doc rowIndex
-        let symbolIndex = binchopLeft row.CharOffsets (charPos - rowRange.rBegin)
+        let symbolIndex = binchopFloor row.CharOffsets (charPos - rowRange.rBegin)
         let x = row.XOffsets.[symbolIndex]
         Point(x, y)
 
@@ -586,7 +586,7 @@ module Doc =
     let getCharIndexFromPoint (doc : Doc) (p : Point) =
         let rowIndex = { rBegin = 0; rEnd = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
         let row, rowRange = getRow doc rowIndex
-        let i = binchopLeft row.XOffsets p.X
+        let i = binchopFloor row.XOffsets p.X
         if i = -1 || i = row.XOffsets.Length - 1 then
             None
         else
@@ -598,7 +598,7 @@ module Doc =
         let rowIndex = { rBegin = 0; rEnd = doc.RowCount }.Clip(p.Y / doc.LayoutInfo.LineHeight)
         let row, rowRange = getRow doc rowIndex
         let symbolPosInRow =
-            let i = binchopLeft row.XOffsets p.X
+            let i = binchopFloor row.XOffsets p.X
             if i = -1 then 0 else i
 
         // if the point is on right half of bounding rectangle of the symbol, it is pointing next symbol.
@@ -624,7 +624,7 @@ module Doc =
             let row, rowRange = getRow doc rowIndex
             if rowRange.Length > 0 then
                 let symbolPosInRow =
-                    let i = binchopLeft row.XOffsets p.X
+                    let i = binchopFloor row.XOffsets p.X
                     if i = -1 then 0 else i
                 let symbolIndexInRow = if symbolPosInRow = row.SymbolCount then row.SymbolCount - 1 else symbolPosInRow
                 let sym = row.GetSymbol(symbolIndexInRow)
