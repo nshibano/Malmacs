@@ -509,7 +509,6 @@ module Doc =
             let scanStart = head.RootMeasure.CharCount
 
             let mutable charPos = 0            
-            let mutable symbolPos = 0
             let mutable xOffset = 0
             let charPoss = List<int>()
             let xOffsets = List<int>()
@@ -518,7 +517,6 @@ module Doc =
                 charPoss.Add(charPos)
                 xOffsets.Add(xOffset)
                 charPos <- charPos + symbol.Length
-                symbolPos <- symbolPos + 1
                 xOffset <- nextXOffset
             
             let mutable cont = true
