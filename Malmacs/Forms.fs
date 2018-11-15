@@ -380,7 +380,7 @@ and Repl() as this =
                         let row, rowRange = Doc.getRow doc i
                         let colors = Array.init row.String.Length (fun j -> colorInfoAt (rowRange.rBegin + j))
                         if colors <> row.Colors then
-                            accu <- accu.ReplaceAt(i, { row with Colors = colors })
+                            accu <- accu.ReplaceAt(i, { row with Colors = Doc.colorInfoArrayIntern colors })
                         i <- i + 1
                     else
                         let newDoc = { doc with RowTree = accu }

@@ -179,7 +179,30 @@ type Buf() =
 [<CompilationRepresentation (CompilationRepresentationFlags.ModuleSuffix)>]
 module Doc =
     
+    let intArrayCache = HashSet<int array>(LanguagePrimitives.FastGenericEqualityComparer)
+    let intArrayIntern (x : int array) =
+        match intArrayCache.TryGetValue(x) with
+        | true, y -> y
+        | false, _ ->
+            intArrayCache.Add(x) |> ignore
+            x
+
     let ColorInfo_Default = { ciForeColor = None; ciBackColor = None; ciUnderlineColor = None; ciText = None }
+    let clearColorInfoArrays = List<ColorInfo array>()
+
+    let colorInfoArrayIsClear (ary : ColorInfo array) =
+        Array.forall (fun x -> LanguagePrimitives.PhysicalEquality x ColorInfo_Default) ary
+
+    let clearColorInfoArrayCreate len =
+        while clearColorInfoArrays.Count <= len do
+            clearColorInfoArrays.Add(Array.create clearColorInfoArrays.Count ColorInfo_Default)
+        clearColorInfoArrays.[len]
+    
+    let colorInfoArrayIntern (ary : ColorInfo array) =
+        if colorInfoArrayIsClear ary then
+            clearColorInfoArrayCreate ary.Length
+        else ary
+
     let RowTreeInfo_Zero = { CharCount = 0; EndOfLineCount = 0; MaximumWidth = 0 }
     let Selection_Zero = { sCaretPos = 0; sAnchorPos = 0 }
 
@@ -537,9 +560,9 @@ module Doc =
 
             let row =
                 { String = rowString
-                  Colors = colors
-                  CharOffsets = charPoss.ToArray()
-                  XOffsets = xOffsets.ToArray()
+                  Colors = colorInfoArrayIntern colors
+                  CharOffsets = intArrayIntern(charPoss.ToArray())
+                  XOffsets = intArrayIntern (xOffsets.ToArray())
                   IsEndOfLine = isEol }
             head <- head.Add(row)
 
@@ -650,11 +673,10 @@ module Doc =
 
     let clearColor (doc : Doc) : Doc =
         let mutable accu = doc.RowTree
-        let isClear (ary : ColorInfo array) = Array.forall (LanguagePrimitives.PhysicalEquality ColorInfo_Default) ary
         for i = 0 to doc.RowTree.Count - 1 do
             let row = doc.RowTree.[i]
-            if not (isClear row.Colors) then
-                accu <- accu.ReplaceAt(i, { row with Colors = Array.create row.String.Length ColorInfo_Default })
+            if not (colorInfoArrayIsClear row.Colors) then
+                accu <- accu.ReplaceAt(i, { row with Colors = clearColorInfoArrayCreate row.String.Length })
         { doc with RowTree = accu }
 
     let prevNext (nextNotPrev : bool) (doc : Doc) charPos =
