@@ -1,1 +1,1 @@
-fslex.exe --unicode Lexer.fsl --lexlib FsMiniMAL.Lexing
+fslexlite --unicode Lexer.fsl --lexlib FsMiniMAL.Lexing
