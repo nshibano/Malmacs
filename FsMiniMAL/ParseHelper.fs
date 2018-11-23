@@ -8,7 +8,7 @@ open Syntax
 
 let get_loc (ps : IParseState) =
     let st, ed = ps.ResultRange
-    let src = (ps.ParserLocalStore.["LexBuffer"] :?> LexBuffer<char>).BufferLocalStore.["src"] :?> string
+    let src = (ps.ParserLocalStore.["LexBuffer"] :?> LexBuffer).LocalStore.["src"] :?> string
     { src = src; st = st; ed = ed }
 
 let make_typ (ps : IParseState) desc = 

@@ -1,19 +1,15 @@
-// This files is copied from https://github.com/fsprojects/FsLexYacc/tree/master/src/FsLexYacc.Runtime and modified to change containing namespace.
-
 // (c) Microsoft Corporation 2005-2009. 
 
-//#if INTERNALIZED_FSLEXYACC_RUNTIME
+#if INTERNALIZED_FSLEXYACC_RUNTIME
 
-//namespace  Internal.Utilities.Text.Parsing
-//open Internal.Utilities
-//open Internal.Utilities.Text.Lexing
+namespace  Internal.Utilities.Text.Parsing
+open Internal.Utilities
+open Internal.Utilities.Text.Lexing
 
-//#else
-//namespace Microsoft.FSharp.Text.Parsing
-//open Microsoft.FSharp.Text.Lexing
-//#endif
+#else
 namespace FsMiniMAL.Parsing
 open FsMiniMAL.Lexing
+#endif
 
 
 
@@ -119,7 +115,6 @@ type internal Stack<'a>(n)  =
         count <- count + 1
         
     member buf.IsEmpty = (count = 0)
-#if __DEBUG
     member buf.PrintStack() = 
         for i = 0 to (count - 1) do 
 #if FX_NO_CONSOLE
@@ -127,7 +122,6 @@ type internal Stack<'a>(n)  =
 #else
             System.Console.Write("{0}{1}",(contents.[i]),if i=count-1 then ":" else "-") 
 #endif         
-#endif
 exception RecoverableParseError
 exception Accept of obj
 
@@ -157,7 +151,7 @@ module Implementation =
     // Read the tables written by FSYACC.  
 
     type AssocTable(elemTab:uint16[], offsetTab:uint16[]) =
-        let cache = new Dictionary<_,_>()
+        let cache = new Dictionary<_,_>(2000)
 
         member t.readAssoc (minElemNum,maxElemNum,defaultValueOfAssoc,keyToFind) =     
             // do a binary chop on the table 
@@ -223,7 +217,7 @@ module Implementation =
         val endPos: Position
         new(value,startPos,endPos) = { value=value; startPos=startPos;endPos=endPos }
 
-    let interpret (tables: Tables<'tok>) lexer (lexbuf : LexBuffer<_>) initialState =                                                                      
+    let interpret (tables: Tables<'tok>) lexer (lexbuf : LexBuffer) initialState =                                                                      
         let localStore = new Dictionary<string,obj>() in
         localStore.["LexBuffer"] <- lexbuf;
 #if __DEBUG

@@ -15,12 +15,12 @@ type lexical_error_desc =
 
 exception Lexical_error of lexical_error_desc
 
-let lexeme_string (lexbuf : LexBuffer<char>) = String(lexbuf.Lexeme)
+let lexeme_string (lexbuf : LexBuffer) = lexbuf.Lexeme
 
 let make_int lexbuf = INT (lexeme_string lexbuf)
 let make_float lexbuf = FLOAT (float (lexeme_string lexbuf))
 
-let ident_or_keyword : LexBuffer<char> -> token =
+let ident_or_keyword : LexBuffer -> token =
     let d = Dictionary<string, token>()
     d.Add("and", AND)
     d.Add("as", AS)
@@ -51,7 +51,7 @@ let ident_or_keyword : LexBuffer<char> -> token =
     d.Add("when", WHEN)
     d.Add("while", WHILE)
     d.Add("with", WITH)
-    (fun (lexbuf : LexBuffer<char>) ->
+    (fun (lexbuf : LexBuffer) ->
         let s = lexeme_string lexbuf
         match d.TryGetValue(s) with
         | true, x -> x
@@ -65,21 +65,21 @@ let char_for_backslash = function
   | 'r' -> '\013'
   | c   -> c
 
-let char_for_dec3_code (lexbuf : LexBuffer<char>) =
-    let code = Int32.Parse(String([| lexbuf.LexemeChar 1; lexbuf.LexemeChar 2; lexbuf.LexemeChar 3 |]))
+let char_for_dec3_code (lexbuf : LexBuffer) =
+    let code = Int32.Parse(lexbuf.Lexeme.Substring(1, 3))
     if 255 < code then raise (Lexical_error Invalid_char_literal)
     Char.ConvertFromUtf32(code).[0]
 
-let char_for_hex4_code (lexbuf : LexBuffer<char>) =
-    let code = Int32.Parse(String([| lexbuf.LexemeChar 2; lexbuf.LexemeChar 3; lexbuf.LexemeChar 4; lexbuf.LexemeChar 5 |]), Globalization.NumberStyles.HexNumber)
+let char_for_hex4_code (lexbuf : LexBuffer) =
+    let code = Int32.Parse(lexbuf.Lexeme.Substring(2, 4), Globalization.NumberStyles.HexNumber)
     Char.ConvertFromUtf32(code).[0]
 
-let mark_as_comments (lexbuf : LexBuffer<char>) (st : Position) (ed : Position) =
+let mark_as_comments (lexbuf : LexBuffer) (st : Position) (ed : Position) =
     let accu =
-        match lexbuf.BufferLocalStore.TryGetValue("comments") with
+        match lexbuf.LocalStore.TryGetValue("comments") with
         | true, x -> x :?> List<Position * Position>
         | false, _ ->
             let accu = List<Position * Position>()
-            lexbuf.BufferLocalStore.["comments"] <- accu
+            lexbuf.LocalStore.["comments"] <- accu
             accu
     accu.Add(st, ed)

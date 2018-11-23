@@ -283,9 +283,9 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
         | UEcoroutine -> dontcare()
 
     let parse (src : string) =
-        let lexbuf = LexBuffer<char>.FromString src
-        lexbuf.EndPos <- { lexbuf.EndPos with pos_fname = dummy_file_name }
-        lexbuf.BufferLocalStore.["src"] <- src
+        let lexbuf = LexBuffer.FromString src
+        lexbuf.EndPos <- { lexbuf.EndPos with FileName = dummy_file_name }
+        lexbuf.LocalStore.["src"] <- src
         try
             let cmds, _ = Parser.Program Lexer.main lexbuf
             Ok cmds

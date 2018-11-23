@@ -31,9 +31,9 @@ let getUnionCaseName<'T > (x : 'T) : string =
 
 [<EntryPoint>]
 let main argv =
-    let lexbuf = LexBuffer<char>.FromString src
-    lexbuf.EndPos <- { lexbuf.EndPos with pos_fname = dummy_file_name }
-    lexbuf.BufferLocalStore.["src"] <- src
+    let lexbuf = LexBuffer.FromString src
+    lexbuf.EndPos <- { lexbuf.EndPos with FileName = dummy_file_name }
+    lexbuf.LocalStore.["src"] <- src
     let cmds, _ = Parser.Program Lexer.main lexbuf
 
     let mutable tyenv = FsMiniMAL.Top.tyenv_std

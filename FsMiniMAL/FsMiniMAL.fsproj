@@ -43,7 +43,6 @@
   <ItemGroup>
     <Content Include="packages.config" />
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Lexing.fsi" />
     <Compile Include="Lexing.fs" />
     <Compile Include="Parsing.fsi" />
     <Compile Include="Parsing.fs" />

@@ -1,19 +1,15 @@
-// This files is copied from https://github.com/fsprojects/FsLexYacc/tree/master/src/FsLexYacc.Runtime and modified to change containing namespace.
-
 //==========================================================================
 // (c) Microsoft Corporation 2005-2009.
 //=========================================================================
 
-//#if INTERNALIZED_FSLEXYACC_RUNTIME
-//namespace Internal.Utilities.Text.Parsing
-//open Internal.Utilities
-//open Internal.Utilities.Text.Lexing
-//#else
-//namespace Microsoft.FSharp.Text.Parsing
-//open Microsoft.FSharp.Text.Lexing
-//#endif
+#if INTERNALIZED_FSLEXYACC_RUNTIME
+namespace Internal.Utilities.Text.Parsing
+open Internal.Utilities
+open Internal.Utilities.Text.Lexing
+#else
 namespace FsMiniMAL.Parsing
 open FsMiniMAL.Lexing
+#endif
 
 open System.Collections.Generic
 
@@ -104,7 +100,7 @@ type Tables<'tok> =
 
     /// Interpret the parser table taking input from the given lexer, using the given lex buffer, and the given start state.
     /// Returns an object indicating the final synthesized value for the parse.
-    member Interpret :  lexer:(LexBuffer<'char> -> 'tok) * lexbuf:LexBuffer<'char> * startState:int -> obj 
+    member Interpret :  lexer:(LexBuffer -> 'tok) * lexbuf:LexBuffer * startState:int -> obj 
 
 #if INTERNALIZED_FSLEXYACC_RUNTIME
 exception internal Accept of obj

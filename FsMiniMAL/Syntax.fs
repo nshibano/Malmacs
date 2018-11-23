@@ -8,10 +8,11 @@ type location = { src : string; st : Position; ed : Position }
 
 let dummyLoc name =
     let pos =
-        { pos_fname = name
-          pos_lnum = 0
-          pos_bol = 0
-          pos_cnum = 0 }
+        { Position.FileName = name
+          Line = 0
+          StartOfLine = 0
+          OriginalLine = 0
+          AbsoluteOffset = 0 }
     { src = ""; st = pos; ed = pos }
 
 type type_expr = 
@@ -151,7 +152,7 @@ let describe_location (loc : location) =
         pf "%d, unexpected EOF" (st.Line + 1)
     elif st.Line = ed.Line then
         // when range is in one line, display char range
-        pf "%d, char %d-%d: \"%s\"" (st.Line + 1) (st.AbsoluteOffset - st.StartOfLineAbsoluteOffset + 1) (ed.AbsoluteOffset - ed.StartOfLineAbsoluteOffset) (input.Substring(st.AbsoluteOffset, (ed.AbsoluteOffset - st.AbsoluteOffset)))
+        pf "%d, char %d-%d: \"%s\"" (st.Line + 1) (st.AbsoluteOffset - st.StartOfLine + 1) (ed.AbsoluteOffset - ed.StartOfLine) (input.Substring(st.AbsoluteOffset, (ed.AbsoluteOffset - st.AbsoluteOffset)))
     else             
         let is_nonwhitespace c = not (System.Char.IsWhiteSpace(c))
 
@@ -170,7 +171,7 @@ let describe_location (loc : location) =
         let first_token = input.Substring(st.AbsoluteOffset, end_of_first_token - st.AbsoluteOffset)
         let last_token = input.Substring(start_of_last_token, ed.AbsoluteOffset - start_of_last_token)
         
-        pf "%d, char %d to line %d, char %d: \"%s ... %s\"" (st.Line + 1) (st.AbsoluteOffset - st.StartOfLineAbsoluteOffset + 1) (ed.Line + 1) (ed.AbsoluteOffset - ed.StartOfLineAbsoluteOffset + 1) first_token last_token
+        pf "%d, char %d to line %d, char %d: \"%s ... %s\"" (st.Line + 1) (st.AbsoluteOffset - st.StartOfLine + 1) (ed.Line + 1) (ed.AbsoluteOffset - ed.StartOfLine + 1) first_token last_token
         
     sb.ToString()
 

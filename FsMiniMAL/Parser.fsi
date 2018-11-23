@@ -216,4 +216,4 @@ val prodIdxToNonTerminal: int -> nonTerminalId
 
 /// This function gets the name of a token as a string
 val token_to_string: token -> string
-val Program : (FsMiniMAL.Lexing.LexBuffer<'cty> -> token) -> FsMiniMAL.Lexing.LexBuffer<'cty> -> (Syntax.command list * System.Collections.Generic.IDictionary<string, obj>) 
+val Program : (FsMiniMAL.Lexing.LexBuffer -> token) -> FsMiniMAL.Lexing.LexBuffer -> (Syntax.command list * System.Collections.Generic.IDictionary<string, obj>) 

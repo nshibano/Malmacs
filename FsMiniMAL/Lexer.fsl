@@ -97,17 +97,17 @@ and eol_comment start = parse
 and char_or_var start_pos = parse
   | "\n'"                               { lexbuf.NewLine()
                                           lexbuf.StartPos <- start_pos;
-                                          CHAR (lexbuf.LexemeChar(0)) }
+                                          CHAR (lexbuf.Lexeme.[0]) }
   | [^ '\\' '''] "'"                    { lexbuf.StartPos <- start_pos;
-                                          CHAR (lexbuf.LexemeChar(0)) }
+                                          CHAR (lexbuf.Lexeme.[0]) }
   | '\\' ['\\' ''' 'n' 't' 'b' 'r'] "'" { lexbuf.StartPos <- start_pos;
-                                          CHAR ((char_for_backslash (lexbuf.LexemeChar(1)))) }
+                                          CHAR ((char_for_backslash (lexbuf.Lexeme.[1]))) }
   | '\\' dec dec dec "'"                { lexbuf.StartPos <- start_pos;
                                           CHAR (char_for_dec3_code lexbuf) }
   | '\\' 'u' hex hex hex hex "'"        { lexbuf.StartPos <- start_pos;
                                           CHAR (char_for_hex4_code lexbuf) }
   | ident                               { lexbuf.StartPos <- start_pos;
-                                          QUOTED (String(lexbuf.Lexeme)) }
+                                          QUOTED (lexbuf.Lexeme) }
   | eof                                  
   | _                                   { raise (Lexical_error Illegal_character) }
 
