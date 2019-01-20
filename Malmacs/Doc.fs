@@ -179,12 +179,12 @@ type Buf() =
 [<CompilationRepresentation (CompilationRepresentationFlags.ModuleSuffix)>]
 module Doc =
     
-    let intArrayCache = HashSet<int array>(LanguagePrimitives.FastGenericEqualityComparer)
+    let intArrayCache = Dictionary<int array, int array>(HashIdentity.Structural)
     let intArrayIntern (x : int array) =
         match intArrayCache.TryGetValue(x) with
         | true, y -> y
         | false, _ ->
-            intArrayCache.Add(x) |> ignore
+            intArrayCache.Add(x, x)
             x
 
     let ColorInfo_Default = { ciForeColor = None; ciBackColor = None; ciUnderlineColor = None; ciText = None }

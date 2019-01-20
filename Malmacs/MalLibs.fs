@@ -85,7 +85,6 @@ let add (mal : Interpreter) =
     mal.Fun("matchGetValue", (fun mm (m : Match) -> m.Value))
     mal.Fun("matchGetIndex", (fun mm (m : Match) -> m.Index))
     mal.Fun("matchGetLength", (fun mm (m : Match) -> m.Length))
-    mal.Fun("matchGetName", (fun mm (m : Match) -> m.Name))
         
     mal.Fun("groupGetCaptures", (fun mm (g : Group) ->
         let captures = g.Captures
@@ -97,7 +96,6 @@ let add (mal : Interpreter) =
     mal.Fun("groupGetIndex", (fun mm (g : Group) -> g.Index))
     mal.Fun("groupGetLength", (fun mm (g : Group) -> g.Length))
     mal.Fun("groupGetValue", (fun mm (g : Group) -> g.Value))        
-    mal.Fun("groupGetName", (fun mm (g : Group) -> g.Name))        
         
     mal.Fun("captureGetIndex", (fun mm (c : Capture) -> c.Index))
     mal.Fun("captureGetLength", (fun mm (c : Capture) -> c.Length))
