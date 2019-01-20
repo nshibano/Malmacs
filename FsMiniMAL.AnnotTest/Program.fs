@@ -6,7 +6,7 @@ open System.Text
 open System.Diagnostics
 open FSharp.Reflection
 
-open FsMiniMAL.Lexing
+open FsLexYaccLite.Lexing
 open Syntax
 open Types
 open Typechk
@@ -32,7 +32,6 @@ let getUnionCaseName<'T > (x : 'T) : string =
 [<EntryPoint>]
 let main argv =
     let lexbuf = LexBuffer.FromString src
-    lexbuf.EndPos <- { lexbuf.EndPos with FileName = dummy_file_name }
     lexbuf.LocalStore.["src"] <- src
     let cmds, _ = Parser.Program Lexer.main lexbuf
 

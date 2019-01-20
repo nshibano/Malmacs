@@ -485,8 +485,7 @@ and Repl() as this =
         interp.Fun("colorOfRgb", fun mm i -> Color.FromArgb(0xFF000000 ||| i))
 
         let parse src =
-            let lexbuf = FsMiniMAL.Lexing.LexBuffer.FromString src
-            lexbuf.EndPos <- { lexbuf.EndPos with FileName = dummy_file_name }
+            let lexbuf = FsLexYaccLite.Lexing.LexBuffer.FromString src
             lexbuf.LocalStore.["src"] <- src
             try
                 let cmds, _ = Parser.Program Lexer.main lexbuf

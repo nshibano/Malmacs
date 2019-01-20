@@ -1,11 +1,10 @@
 ﻿// After modify this file, run GenLexer.bat to generate Lexer.fs.
 {
-module FsMiniMAL.Lexer
-
 open System
 open System.Text
 open Parser
-open LexHelper
+open FsMiniMAL.Misc
+open FsMiniMAL.LexHelper
 }
 
 let dec = ['0'-'9']

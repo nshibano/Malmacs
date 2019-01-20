@@ -4,7 +4,7 @@ open System
 open System.Collections.Generic
 open System.Text
 
-open FsMiniMAL.Lexing
+open FsLexYaccLite.Lexing
 open Syntax
 open Types
 open Typechk
@@ -284,7 +284,6 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
 
     let parse (src : string) =
         let lexbuf = LexBuffer.FromString src
-        lexbuf.EndPos <- { lexbuf.EndPos with FileName = dummy_file_name }
         lexbuf.LocalStore.["src"] <- src
         try
             let cmds, _ = Parser.Program Lexer.main lexbuf
@@ -932,7 +931,7 @@ type Interpreter(mm : MemoryManager, tyenv : tyenv, alloc : alloc, env : MalValu
                 if pos <> ed then
                     sb.Add("...")
                 sb.ToString()
-            sprintf "%s (%d,%d) %s" loc.st.FileName (loc.st.Line+1) (loc.st.Column+1) chunk
+            sprintf "(%d,%d) %s" (loc.st.Line+1) (loc.st.Column+1) chunk
         pfn "Stacktrace:"
         let st = min (limit - 1) stack_topidx
         if st <> stack_topidx then

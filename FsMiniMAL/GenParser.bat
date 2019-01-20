@@ -1,1 +1,1 @@
-fsyacclite --module FsMiniMAL.Parser Parser.fsy --lexlib FsMiniMAL.Lexing --parslib FsMiniMAL.Parsing -v --newprec
+fsyacclite Parser.fsy

@@ -1,8 +1,8 @@
 ﻿module FsMiniMAL.ParseHelper
 
 open System.Collections.Generic
-open FsMiniMAL.Parsing
-open FsMiniMAL.Lexing
+open FsLexYaccLite.Parsing
+open FsLexYaccLite.Lexing
 
 open Syntax
 

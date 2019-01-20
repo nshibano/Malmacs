@@ -2,16 +2,14 @@
 
 open System.Collections.Generic
 
-open FsMiniMAL.Lexing
+open FsLexYaccLite.Lexing
 
 type location = { src : string; st : Position; ed : Position }
 
 let dummyLoc name =
     let pos =
-        { Position.FileName = name
-          Line = 0
+        { Line = 0
           StartOfLine = 0
-          OriginalLine = 0
           AbsoluteOffset = 0 }
     { src = ""; st = pos; ed = pos }
 
@@ -140,13 +138,10 @@ and lex_def =
 
 let describe_location (loc : location) =
     let {src = input; st = st; ed = ed} = loc
-    let filename = if st.FileName = dummy_file_name then None else Some (st.FileName)
     let sb = System.Text.StringBuilder()
     let pf fmt = Printf.bprintf sb fmt
 
-    match filename with
-        | Some filename -> pf "In \"%s\", line " filename
-        | None -> pf "Line "
+    pf "Line "
 
     if not (st.AbsoluteOffset < input.Length) then
         pf "%d, unexpected EOF" (st.Line + 1)

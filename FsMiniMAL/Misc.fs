@@ -6,7 +6,7 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.RegularExpressions
 
-type FsMiniMAL.Lexing.LexBuffer with
+type FsLexYaccLite.Lexing.LexBuffer with
     member lexbuf.NewLine() = lexbuf.EndPos <- lexbuf.EndPos.NextLine
 
 type System.Text.StringBuilder with

@@ -12,7 +12,7 @@ open System.Threading.Tasks
 open FsMiniMAL
 open FsMiniMAL.Types
 open FsMiniMAL.Value
-open FsMiniMAL.Lexing
+open FsLexYaccLite.Lexing
 open FsMiniMAL.Syntax
 open FsMiniMAL.Typechk
 

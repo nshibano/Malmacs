@@ -2,7 +2,7 @@
 
 open System
 open System.Numerics
-open FsMiniMAL.Lexing
+open FsLexYaccLite.Lexing
 open Parser
 open System.Collections.Generic
 open System.Text.RegularExpressions
