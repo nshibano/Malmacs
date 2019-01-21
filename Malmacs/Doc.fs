@@ -584,12 +584,17 @@ module Doc =
         let ofs = row.CharOffsets.[symbolIndexInRow]
         let len = row.CharOffsets.[symbolIndexInRow + 1] - row.CharOffsets.[symbolIndexInRow]
         row.String.Substring(ofs, len)
-
+    
     let getSelectedString (doc : Doc) =
-        let range = doc.Selection.ToRange()
-        let sb = StringBuilder(range.Length)
-        for i = range.rBegin to range.rEnd - 1 do
-            sb.Add(getChar doc i)
+        let selectedRange = doc.Selection.ToRange()
+        let rowIndexBegin = getRowIndexFromCharPos doc selectedRange.rBegin
+        let rowIndexEnd = getRowIndexFromCharPos doc selectedRange.rEnd
+        let sb = StringBuilder(selectedRange.Length)
+        for rowIndex = rowIndexBegin to rowIndexEnd do
+            let row, rowRange = getRow doc rowIndex
+            let bgn = max rowRange.rBegin selectedRange.rBegin
+            let ed = min rowRange.rEnd selectedRange.rEnd
+            sb.Append(row.String, bgn - rowRange.rBegin, ed - bgn) |> ignore
         sb.ToString()
 
     let getAllString (doc : Doc) = String.Concat(Array.map (fun (row : Row) -> row.String) (doc.RowTree.ToArray()))
