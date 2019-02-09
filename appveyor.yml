@@ -1,13 +1,5 @@
 version: 1.0.{build}
 image: Visual Studio 2017
-configuration: Release
 shallow_clone: true
-before_build:
-- cmd: nuget restore
-build:
-  project: Malmacs
-  verbosity: minimal
-after_build:
-- cmd: '"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" Malmacs.iss'
-artifacts:
-- path: Output\MalmacsInstaller.exe
+build_script:
+  - '"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\CommonExtensions\Microsoft\FSharp\fsi.exe" Publish.fsx'
