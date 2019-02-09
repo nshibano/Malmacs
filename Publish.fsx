@@ -19,11 +19,12 @@ let pushArtifact path =
     if inAppveyor then
         cmd "appveyor" ("PushArtifact " + path)
 
+cmd "nuget" "restore"
+cmd "msbuild" @"/p:Configuration=Release Malmacs.sln"
+
 if Directory.Exists("Publish") then
     Directory.Delete("Publish", true)
 Directory.CreateDirectory(@"Publish") |> ignore
-cmd "msbuild" @"/p:Configuration=Release Malmacs.sln"
-
 
 copyAllFiles @"Malmacs\bin\Release" "Publish"
 copyAllFiles @"Malmacs\Mal" @"Publish\Mal"
